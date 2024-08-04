@@ -1,0 +1,5217 @@
+<!DOCTYPE html>
+<html>
+<head>
+
+	<script type="text/javascript">
+		window.wm = {};
+		wm.config = {
+			
+			project: {				
+				// Where to load available entity files from
+				entityFiles: 'src/entities/',
+				
+				// The default path for the level file selection box
+				levelPath: 'assets/levels/',
+				
+				// Whether to pretty print the JSON data in level files. If you have
+				// any issues with your levels, it's usually a good idea to turn this
+				// on and look at the saved level files with a text editor.
+				prettyPrint: true,
+
+				defaultEntityColor: 'rgba(128, 255, 128, 0.9)'
+			},
+			
+			// Default settings when creating new layers in Weltmeister. Change these
+			// as you like
+			layerDefaults: {
+				width: 30,
+				height: 20,
+				tilesize: 8
+			},
+			
+			// Whether to ask before closing Weltmeister when there are unsaved changes
+			askBeforeClose: true,
+			
+			// Whether to attempt to load the last opened level on startup
+			loadLastLevel: true,
+			
+			// Size of the "snap" grid when moving entities
+			entityGrid: 4,
+			
+			// Number of undo levels. You may want to increase this if you use 'undo'
+			// frequently.
+			undoLevels: 500,
+			
+			// Mouse and Key bindings in Weltmeister. Some function are bound to
+			// several keys. See the documentation of ig.Input for a list of available
+			// key names.
+			binds: {
+				MOUSE1: 'draw',
+				MOUSE2: 'drag',
+				SHIFT: 'select',
+				CTRL: 'drag',
+				SPACE: 'menu',
+				DELETE: 'delete',
+				BACKSPACE: 'delete',
+				G: 'grid',
+				C: 'clone',
+				Z: 'undo',
+				Y: 'redo',
+				S: 'save',
+				MWHEEL_UP: 'zoomin',
+				PLUS: 'zoomin',
+				MWHEEL_DOWN: 'zoomout',
+				MINUS: 'zoomout'
+			},
+
+			// Whether to enable unidirectional scrolling for touchpads; this
+			// automatically unbinds the MWHEEL_UP and MWHEEL_DOWN actions.
+			touchScroll: false,
+			
+			// View settings. You can change the default Zoom level and whether
+			// to show the grid on startup here.
+			view: {
+				zoom: 1,
+				zoomMax: 4,
+				zoomMin: 0.125,
+				grid: false
+			},
+			
+			// Font face and size for entity labels and the grid coordinates
+			labels: {
+				draw: true,
+				step: 32,
+				font: '10px Bitstream Vera Sans Mono, Monaco, monospace, sans-serif'
+			},
+			
+			// Colors to use for the background, selection boxes, text and the grid
+			colors: {
+				clear: '#000000',		// Background Color
+				highlight: '#ceff36',	// Currently selected tile or entity
+				primary: '#ffffff', 	// Labels and layer bounds
+				labelbg: 'rgba(0,0,0,0.5)', // Label background
+				secondary: '#555555', // Grid and tile selection bounds
+				selection: '#ff9933',	// Selection cursor box on tile maps
+
+				// Colors for collision tileset
+				collision: {
+					primary: '#bf80ff',
+					secondary: '#7f00ff',
+					indicator: '#ffffff'
+				}
+			}
+		};
+
+
+
+
+
+		////////////////////////////////////////////////////////////////////////
+		////////////////////////////////////////////////////////////////////////
+		////////////////////////////////////////////////////////////////////////
+
+		// Following is the somewhat condensed source code of the original
+		// editor from 2010 - a time when JS had no classes. 
+
+		// There's a lot of things that are easier to do with modern JS, CSS 
+		// and the DOM and a lot of things I would just do differently today.
+
+		// So beware, there's not much to learn here and no up-to-date best 
+		// practices to be found.
+
+		////////////////////////////////////////////////////////////////////////
+		////////////////////////////////////////////////////////////////////////
+		////////////////////////////////////////////////////////////////////////
+	</script>
+
+
+
+
+	<meta http-equiv="Content-Type" content="text/html; charset=utf-8"/>
+	<title>Weltmeister</title>
+	<style>
+		* {
+			box-sizing: border-box;
+		}
+
+		html {
+			margin: 0;
+			padding: 0;
+		}
+
+		body {
+			background-color: #555;
+			color: #fff;
+			font-family: sans-serif;
+			font-size: 14px;
+			margin: 0px;
+			overflow: hidden;
+			text-shadow: 0px 1px 1px rgba(0,0,0,0.5);
+			user-select: none;
+		}
+
+		h2 {
+			margin: 0 0 4px 0;
+			padding: 4px 0 4px 6px;
+			background-color: #000;
+			font-size: 100%;
+			color: #555;
+		}
+
+		h3 {
+			margin: 0;
+			font-size: 100%;
+			display: block;
+		}
+
+		dt {
+			margin: 0;
+			padding: 4px 0 0 6px;
+			display:inline;
+			float:left;
+			margin-right:5px;
+		}
+
+		dd {
+			margin: 0;
+			padding: 2px 0 8px 6px;
+		}
+
+		dl {
+			margin:0;
+		}
+
+		div.clear {
+			clear: both;
+		}
+
+		a {
+			color: #fff;
+			text-decoration: underline;
+		}
+
+		/* --- Input ------------------------------------------------------------------ */
+
+		input {
+			background-color: rgba(32,32,32,0.5);
+			border: 1px solid rgb(50,50,50);
+			color: #fff;
+			margin: 0;
+			font-family: sans-serif;
+			font-size: 10pt;
+			outline: none;
+		}
+
+		input:focus{
+			border: 1px solid rgb(200,200,200);
+		}
+
+		input.text {
+			padding: 4px 4px;
+			margin: 0px 4;
+			width: 100%;
+		}
+
+		input.number {
+			padding: 4px 4px;
+			margin: 0px 4;
+			width: 40px;
+			text-align: right;
+		}
+
+		input.button, button {
+			font-size: 90%;
+			padding-left: 13px;
+			padding-right: 13px;
+			padding-top: 5px;
+			padding-bottom: 5px;
+			color: #bbb;
+			font-weight: bold;
+			background-color: #222;
+			border:none;
+			cursor: pointer;
+		}
+
+		input.button:hover, button:hover {
+			background-color: #fafafa;
+			color: #555;
+		}
+
+		input.button:active, button:active {
+			background-color: #fff;
+		}
+
+		input.text#layerName {
+			width:140px;
+		}
+
+		input.text#layerTileset {
+			width:138px;
+		}
+
+		input#levelSaveAs { margin-right: 10px; }
+		input#levelLoad { margin-right: 10px; }
+
+		input:disabled {
+			background-color: #555;
+			color: #888;
+		}
+
+		/* --- Layout ------------------------------------------------------------------ */
+
+		#editor {
+			margin: 0px;
+			position: relative;
+		}
+
+		#canvas {
+			image-rendering: optimizeSpeed;
+			-webkit-interpolation-mode: nearest-neighbor;
+		}
+
+		#menu {
+			width: 200px;
+			float: right;
+			position:absolute;
+			top:0px;
+			right:0px;
+		}
+
+		/* --- Layers ------------------------------------------------------------------ */
+
+		#layerContainer {
+			background-color: rgba(0,0,0,0.95);
+			padding-right:2px;
+		}
+
+		#layers {
+			max-height: 200px;
+			overflow: auto;
+		}
+
+		#layerButtons div.button#buttonAddLayer {
+			position:absolute;
+			right: 0px;
+			top:-5px;
+			cursor: pointer;
+			padding: 10px;
+			color:rgba(255,255,255,0.5);
+			font-weight: bold;
+			font-size:110%;
+			margin-left:1px;
+			z-index:10;
+		}
+		#layerButtons div.button#buttonAddLayer:hover { color:rgba(255,255,255,1);}
+		#layerButtons div.button#buttonAddLayer:active { color:rgba(255,255,255,1);}
+
+		.layer {
+			padding: 6px 4px;
+			cursor: pointer;
+			border-top: 1px solid rgba(255,255,255,0);
+			border-bottom: 1px solid rgba(255,255,255,0);
+			position: relative;
+		}
+
+		.layer:hover {
+			background-color: rgba(255,255,255,0.1);
+			border-top: 1px solid rgba(255,255,255,0.1);
+			border-bottom: 1px solid rgba(255,255,255,0.1);
+		}
+
+		.layerActive, .layer.layerActive:hover { 
+			background-color: rgba(255,255,255,0.2); 
+			border-top: 1px solid rgba(255,255,255,0.2);
+			border-bottom: 1px solid rgba(255,255,255,0.2) !important;
+		}
+
+
+		#layerEntities { border-bottom: 1px solid #000; }
+
+		.layer .visible {
+			background-color: rgba(255,255,255,0.2); 
+			text-indent: -99999px; 
+			display: inline-block;
+			width: 10px; 
+			height: 10px; 
+			margin-right: 7px; 
+			margin-left: 4px; 
+		}
+
+		.layer .visible.specialVis{
+			margin-right: 2px;
+		}
+
+		.layer .checkedVis{ background-color: rgba(255,255,255,1); }
+		.layer span.size { font-size: 75%; color: rgba(255,255,255,0.7); }
+
+		#layerSettings {
+			background-color: rgba(0,0,0,0.95);
+			padding-top: 5px;
+			margin-top: 1px;
+			display: none;
+		}
+
+		.layerMove {
+			position: absolute;
+			top: 3px;
+			right: 0;
+			bottom: 3px;
+			width: 18px;
+			cursor: move;
+			background-image: radial-gradient(#777 1px, transparent 0);
+			background-size: 8px 8px;
+		}
+		.layerMove:hover {
+			background-image: radial-gradient(#ccc 1px, transparent 0);
+		}
+
+		/* --- Entities ------------------------------------------------------------------ */
+		h3#entityClass {
+			border-bottom: 1px solid rgba(255,255,255,0.2);
+			padding: 5px;
+			padding-left: 10px;
+		}
+
+		#entitySettings {
+			background-color: rgba(0,0,0,0.95);
+			margin-top: 1px;
+			display: none;
+		}
+
+		#entityDefinitions {
+			max-height: 220px;
+			overflow: auto;
+		}
+
+		div.entityDefinition {
+			color: #aaa;
+			padding: 2px 0;
+			border-bottom: 1px solid rgba(255,255,255,0.2);
+			cursor: pointer;
+		}
+
+		div.entityDefinition:hover {
+			background-color: rgba(255,255,255,0.1);
+		}
+
+		div.entityDefinition .key {
+			width: 50%;
+			display: block;
+			float: left;
+			margin: 0 0px 0 0;
+			padding: 0 0 0 8px;
+			text-align: left;
+			color: #fff;
+			overflow: hidden;
+		}
+
+		div.entityDefinition .value {
+			padding: 0 0 0 2px;
+			color: #fff;
+		}
+
+		dl#entityDefinitionInput {
+			padding: 8px 4px;
+		}
+
+		dl#entityDefinitionInput dd {
+			display: block;
+			margin: 0;
+			padding: 2px 0;
+		}
+
+		dl#entityDefinitionInput input {
+			width: 100%;
+		}
+
+		div.row {
+			display: flex;
+			padding: 4px;
+			align-items: center;
+			gap: 4px;
+		}
+
+		div.group {
+			margin-top: 8px;
+		}
+
+		#entityKey, #entityValue {
+		}
+
+		#entityMenu {
+			background-color: rgba(0,0,0,0.9);
+			display: none;
+			position: absolute;
+			min-width: 100px;
+			max-height:300px;
+			overflow-y: scroll;
+			z-index: 1000;
+		}
+
+		#entityMenu div {
+			padding: 3px;
+			padding-left: 8px;
+			color: #fff;
+			cursor: pointer;
+			border-top: 1px solid rgba(255,255,255,0);
+			border-bottom: 1px solid rgba(255,255,255,0);
+		}
+
+		#entityMenu div:hover {
+			background-color: rgba(255,255,255,0.2);
+			border-top: 1px solid rgba(255,255,255,0.2);
+			border-bottom: 1px solid rgba(255,255,255,0.2);
+		}
+
+		/* --- Dialogs ------------------------------------------------------------------ */
+		.selectFileDialogWrap {
+			position: relative;
+		}
+
+		.selectFileDialog {
+			background-color: rgba(0,0,0,0.9);
+			border: 1px solid white;
+			border-top: 1px solid rgba(255,255,255,0.4);
+			display: none;
+			position: absolute;
+			overflow: hidden;
+			
+			max-height: 300px;
+			overflow-y: scroll;
+		}
+
+		.selectFileDialog span {
+			padding: 4px;
+			color: #fff;
+			display: block;
+			text-decoration: none;
+			border-top: 1px solid rgba(255,255,255,0);
+			border-bottom: 1px solid rgba(255,255,255,0);
+		}
+
+		.selectFileDialog span:hover {
+			background-color: rgba(255,255,255,0.2);
+			border-top: 1px solid rgba(255,255,255,0.2);
+			border-bottom: 1px solid rgba(255,255,255,0.2);
+		}
+
+		div.modalDialogBackground {
+			background-color: rgba(0,0,0,0.7);
+			width: 100%;
+			height: 100%;
+			position: fixed;
+			top: 0;
+			left: 0;
+			display: none;
+			z-index: 100;
+		}
+
+		div.modalDialogBox {
+			width: 300px;
+			margin-left: -170px;
+			background-color: rgba(0,0,0,0.9);
+			border: 1px solid rgb(100,100,100);
+			position: absolute;
+			top: 20%;
+			left: 50%;
+			padding: 20px;
+		}
+
+		div.modalDialogText {
+			font-size: 180%;
+			font-weight: bold;
+		}
+
+		div.modalDialogButtons {
+			margin-top: 20px;
+			text-align: right;
+		}
+
+		div.modalDialogButtons input.button {
+			min-width: 100px;
+			text-align: center;
+			margin-left: 10px;
+		}
+
+		input.modalDialogPath {
+			margin-top: 20px;
+			width: 100%;
+			outline: none;
+		}
+
+		input.modalDialogPath:focus {
+			outline: none;
+			border: 1px solid rgb(100,100,100);
+		}
+
+		#headerMenu {
+			position:relative;
+			z-index:10;
+			height:40px;
+			width:100%;
+			background: #111;
+			padding: 8px;
+		}
+
+		#headerMenu span.headerTitle {
+			display:inline-block;
+			font-weight:normal;
+			font-size:140%;
+			padding-left:20px;
+			color: #bbb;
+		}
+
+		#headerMenu span.unsavedTitle {
+			display:inline-block;
+			font-weight:normal;
+			font-size:140%;
+			padding-left:0px;
+			color:#cc0000;
+		}
+
+		#headerMenu span.headerFloat {
+			float: right;
+		}
+
+		#headerMenu span.headerFloat  button {
+			margin-left: 8px;
+		}
+
+		.fullscreenOverlay {
+			background-color: rgba(0, 0, 0, 0.7);
+			width: 100%;
+			height: 100%;
+			position: fixed;
+			top: 0;
+			left: 0;
+			z-index: 50;
+		}
+		.fullscreenBox {
+			position: absolute;
+			top: 10vh;
+			left: 0;
+			right: 0;
+			margin: auto;
+			width: 60vw;
+			max-width: 500px;
+			background: #111;
+			color: #eee;
+			padding: 16px;
+			font-size: 16px;
+		}
+		.fullscreenOverlay button {
+			width: 100%;
+			color: #fff;
+			background-color: #555;
+			padding: 12px;
+		}
+		.fullscreenOverlay button:hover {
+			background-color: #fff;
+			color: #000;
+		}
+		.fullscreenOverlay code {
+			font-weight: bold;
+		}
+		#helpScreenOverlay {
+			display: none;
+		}
+
+
+		div#zoomIndicator {
+			font-weight: bold;
+			font-size: 300%;
+			position: absolute;
+			left: 50px;
+			top: 30px;
+			color: #fff;
+			display: none;
+		}
+
+		button#toggleSidebar {
+			width: 186px;
+			opacity: 0.5;
+		}
+
+		button#toggleSidebar.active{
+			opacity: 1;
+		}
+
+		input[type="checkbox"] {
+			position: relative; 
+			margin: 0 4px 0 0; 
+			border: 0; 
+			width: 14px; 
+			height: 14px;
+			display: inline-block; 
+			appearance: none; 
+		}
+		input[type="checkbox"] { 
+			background-color:rgba(255,255,255,0.2); 
+		}
+		input[type="checkbox"]:checked { 
+			background-color: rgba(255,255,255,1); 
+		}
+		input[type="checkbox"]:hover { 
+			cursor: pointer; 
+		}
+		input[type="checkbox"]:disabled {
+			background-color: rgba(255,255,255,0.1); 
+		}
+	</style>
+</head>
+<body>
+<div id="headerMenu">
+	<span class="headerTitle"></span>
+	<span class="unsavedTitle"></span>
+	<span class="headerFloat">
+		<button id="help">Help</button>
+		<button id="openProject">Switch Project</button>
+		<button id="levelSave" title="ctrl+s">Save</button>
+		<button id="levelSaveAs" title="ctrl+shift+s">Save As</button>
+		<button id="levelNew">New</button>
+		<button id="levelLoad">Load</button>
+		<button id="toggleSidebar" class="active">Layers&nbsp;&nbsp;☰</button>
+	</span>
+</div>
+
+<div id="editor">
+	<div id="entityMenu"></div>
+	
+	<canvas id="canvas"></canvas>
+	
+	<div id="menu">
+		<div id="layerContainer">
+			<h2>&nbsp;</h2>
+			<div id="layerButtons">
+				<div class="button" id="buttonAddLayer" title="Add Layer">+</div>
+			</div>
+			<div id="layers">
+				<div id="layerEntities" class="layer">
+					<span class="visible specialVis checkedVis" title="Toggle Visibility (Shift+0)"></span>
+					<span class="name">entities</span>
+					<span class="layerMove" title="Move layer"></span>
+				</div>
+			</div>
+		</div>
+		
+		
+		<div id="layerSettings">
+			<h2>Layer Settings</h2>
+			<div class="row">
+				<label>Name:</label>
+				<input type="text" class="text" id="layerName"/>
+			</div>
+			<div class="row">
+				<label>Tileset:</label>
+				<div><input type="text" class="text" id="layerTileset"/></div>
+			</div>
+
+			<div class="row">
+				<label>Tilesize:</label>
+				<input type="text" class="number" id="layerTilesize"/>
+			</div>
+
+			<div class="row">
+				<label>Dimensions:</label>
+				<div>
+					<input type="text" class="number" id="layerWidth"/> &times; <input type="text" class="number" id="layerHeight"/>
+				</div>
+			</div>
+
+			<div class="row">
+				<label>Distance:</label>
+				<input type="text" class="number" id="layerDistance"/>
+			</div>
+
+			<div class="group">
+				<div class="row">
+					<input type="checkbox" id="layerIsCollision"/>
+					<label for="layerIsCollision">Is Collision Layer</label>
+				</div>
+
+				<div class="row">
+					<input type="checkbox" id="layerRepeat"/>
+					<label for="layerRepeat">Repeat</label>
+				</div>
+
+				<div class="row">
+					<input type="checkbox" id="layerLinkWithCollision"/>
+					<label for="layerLinkWithCollision">Link with Collision</label>
+				</div>
+			</div>
+
+			<div class="group">
+				<div class="row">
+					<button id="buttonSaveLayerSettings">Apply Changes</button>
+					<button id="buttonRemoveLayer">Delete</button>
+				</div>
+			</div>
+		</div>
+		
+		<div id="entitySettings">
+			<h2>Entity Settings</h2>
+			<h3 id="entityClass">EntityClassName</h3>
+			<div id="entityDefinitions">
+				<div class="entityDefinition"><span class="key">x</span><span class="value">188</span></div>
+				<div class="entityDefinition"><span class="key">y</span><span class="value">269</span></div>
+			</div>
+			<dl id="entityDefinitionInput">
+				<dd><input type="text" class="text" id="entityKey" placeholder="key" /></dd>
+				<dd><input type="text" class="text" id="entityValue" placeholder="value"/></dd>
+			</dl>
+			<dd>
+				<button id="buttonEntityDefinition">Set</button>
+			</dd>
+		</div>
+	</div>
+	
+	<div id="zoomIndicator">1x</div>
+
+	<div class="fullscreenOverlay" id="welcomeScreenOverlay">
+		<div class="fullscreenBox">
+			<h1>Weltmeister</h1>
+			<p>
+				Begin by picking your project directory – The directory containing 
+				the Makefile. 
+			</p>
+			<p>
+				This enables Weltmeister to look through 
+				<code>src/entities/*.c</code> in this directory to find available 
+				entity types and load and save levels.
+			</p>
+			<button id="openInitialProject">Pick Project Directory</button>
+		</div>
+	</div>
+
+	<div class="fullscreenOverlay" id="helpScreenOverlay">
+		<div class="fullscreenBox">
+			<h1>Quick Reference</h1>
+			<p>
+				<div><code>space</code>: open tileset selection or entity selection menu</div>
+				<div><code>left mouse button</code>: draw selected tiles or select entity</div>
+				<div><code>shift</code>: hold to select an area of tiles on the map (also works in the tile-selection menu)</div>
+				<div><code>right mouse button</code>: drag view</div>
+				<div><code>backspace</code>: delete selected entity</div>
+				<div><code>mouse wheel</code>: zoom in/out</div>
+				<div><code>+</code>: zoom in</div>
+				<div><code>-</code>: zoom out</div>
+				<div><code>s</code>: quick save</div>
+				<div><code>g</code>: toggle grid</div>
+				<div><code>c</code>: clone selected entity</div>
+				<div><code>z</code>: undo</div>
+				<div><code>y</code>: redo</div>
+			</p>
+			<p>
+				These key bindings can be changed in the first few lines of weltmeister.html.
+			</p>
+			<p>
+				Entities can be connected by giving one entity a <code>name</code> and 
+				another entity a <code>target.1</code> with this name.
+			</p>
+			<p>
+				Some more documentation is available on
+				<a href="https://impactjs.com/documentation/weltmeister" target="_blank">impactjs.com</a> – 
+				this is for the original JavaScript game engine, but many things are the same here.
+			</p>
+			<button id="closeHelp">Close</button>
+		</div>
+	</div>
+</div>
+
+<script type="text/javascript">
+
+(function(window){ "use strict";
+
+
+// -----------------------------------------------------------------------------
+// ig Namespace
+
+window.ig = {
+	game: null,
+	debug: null,
+	version: '1.24',
+	global: window,
+	ready: false,
+	baked: false,
+	nocache: '',
+	ua: {},
+	prefix: (window.ImpactPrefix || ''),
+	lib: 'lib/',
+	
+	_current: null,
+	_loadQueue: [],
+	_waitForOnload: 0,
+
+	clamp: function(v, min, max) {
+		return Math.min(max, Math.max(min, v));
+	},
+
+	arrayRemove: function(a, v) {
+		for (var i = a.length; i--;) {
+			if (a[i] === v) {
+				a.splice(i, 1);
+			}
+		}
+		return a;
+	},
+	
+	copy: function( object ) {
+		if(
+		   !object || typeof(object) != 'object' ||
+		   object instanceof HTMLElement ||
+		   object instanceof ig.Class
+		) {
+			return object;
+		}
+		else if( object instanceof Array ) {
+			var c = [];
+			for( var i = 0, l = object.length; i < l; i++) {
+				c[i] = ig.copy(object[i]);
+			}
+			return c;
+		}
+		else {
+			var c = {};
+			for( var i in object ) {
+				c[i] = ig.copy(object[i]);
+			}
+			return c;
+		}
+	},
+	
+	
+	merge: function( original, extended ) {
+		for( var key in extended ) {
+			var ext = extended[key];
+			if(
+				typeof(ext) != 'object' ||
+				ext instanceof HTMLElement ||
+				ext instanceof ig.Class ||
+				ext === null
+			) {
+				original[key] = ext;
+			}
+			else {
+				if( !original[key] || typeof(original[key]) != 'object' ) {
+					original[key] = (ext instanceof Array) ? [] : {};
+				}
+				ig.merge( original[key], ext );
+			}
+		}
+		return original;
+	},
+	
+	
+	ksort: function( obj ) {
+		if( !obj || typeof(obj) != 'object' ) {
+			return [];
+		}
+		
+		var keys = [], values = [];
+		for( var i in obj ) {
+			keys.push(i);
+		}
+		
+		keys.sort();
+		for( var i = 0; i < keys.length; i++ ) {
+			values.push( obj[keys[i]] );
+		}
+		
+		return values;
+	},
+
+	// Ah, yes. I love vendor prefixes. So much fun!
+	setVendorAttribute: function( el, attr, val ) {
+		var uc = attr.charAt(0).toUpperCase() + attr.substr(1);
+		el[attr] = el['ms'+uc] = el['moz'+uc] = el['webkit'+uc] = el['o'+uc] = val;
+	},
+
+
+	getVendorAttribute: function( el, attr ) {
+		var uc = attr.charAt(0).toUpperCase() + attr.substr(1);
+		return el[attr] || el['ms'+uc] || el['moz'+uc] || el['webkit'+uc] || el['o'+uc];
+	},
+
+
+	normalizeVendorAttribute: function( el, attr ) {
+		var prefixedVal = ig.getVendorAttribute( el, attr );
+		if( !el[attr] && prefixedVal ) {
+			el[attr] = prefixedVal;
+		}
+	},
+	
+	
+	// Stubs for ig.Debug
+	log: function() {},
+	assert: function( condition, msg ) {},
+	show: function( name, number ) {},
+	mark: function( msg, color ) {},	
+	
+	_boot: function() {		
+		// Probe user agent string
+		ig.ua.pixelRatio = window.devicePixelRatio || 1;
+		ig.ua.viewport = {
+			width: window.innerWidth,
+			height: window.innerHeight
+		};
+		ig.ua.screen = {
+			width: window.screen.availWidth * ig.ua.pixelRatio,
+			height: window.screen.availHeight * ig.ua.pixelRatio
+		};
+		
+		ig.ua.iPhone = /iPhone|iPod/i.test(navigator.userAgent);
+		ig.ua.iPhone4 = (ig.ua.iPhone && ig.ua.pixelRatio == 2);
+		ig.ua.iPad = /iPad/i.test(navigator.userAgent);
+		ig.ua.android = /android/i.test(navigator.userAgent);
+		ig.ua.winPhone = /Windows Phone/i.test(navigator.userAgent);
+		ig.ua.iOS = ig.ua.iPhone || ig.ua.iPad;
+		ig.ua.mobile = ig.ua.iOS || ig.ua.android || ig.ua.winPhone || /mobile/i.test(navigator.userAgent);
+		ig.ua.touchDevice = (('ontouchstart' in window) || (window.navigator.msMaxTouchPoints));
+	}
+};
+
+// Json pretty print
+
+(function(window) {
+	var p = [],
+		push = function( m ) { return '\\' + p.push( m ) + '\\'; },
+		pop = function( m, i ) { return p[i-1] },
+		tabs = function( count ) { return new Array( count + 1 ).join( '\t' ); };
+
+	ig.jsonPrettyPrint = function( json ) {
+		p = [];
+		var out = "",
+			indent = 0;
+		
+		// Extract backslashes and strings
+		json = json
+			.replace( /\\./g, push )
+			.replace( /(".*?"|'.*?')/g, push )
+			.replace( /\s+/, '' );		
+		
+		// Indent and insert newlines
+		for( var i = 0; i < json.length; i++ ) {
+			var c = json.charAt(i);
+			
+			switch(c) {
+				case '{':
+				case '[':
+					out += c + "\n" + tabs(++indent);
+					break;
+				case '}':
+				case ']':
+					out += "\n" + tabs(--indent) + c;
+					break;
+				case ',':
+					out += ",\n" + tabs(indent);
+					break;
+				case ':':
+					out += ": ";
+					break;
+				default:
+					out += c;
+					break;      
+			}					
+		}
+		
+		// Strip whitespace from numeric arrays and put backslashes 
+		// and strings back in
+		out = out
+			.replace( /\[[\d,\s]+?\]/g, function(m){ return m.replace(/\s/g,''); } ) 
+			.replace( /\\(\d+)\\/g, pop );
+		
+		return out;
+	};
+})(window);
+
+
+// -----------------------------------------------------------------------------
+// Provide ig.setAnimation and ig.clearAnimation as a compatible way to use
+// requestAnimationFrame if available or setInterval otherwise
+
+// Use requestAnimationFrame if available
+ig.normalizeVendorAttribute( window, 'requestAnimationFrame' );
+if( window.requestAnimationFrame ) {
+	var next = 1,
+		anims = {};
+
+	window.ig.setAnimation = function( callback ) {
+		var current = next++;
+		anims[current] = true;
+
+		var animate = function() {
+			if( !anims[current] ) { return; } // deleted?
+			window.requestAnimationFrame( animate );
+			callback();
+		};
+		window.requestAnimationFrame( animate );
+		return current;
+	};
+
+	window.ig.clearAnimation = function( id ) {
+		delete anims[id];
+	};
+}
+
+// [set/clear]Interval fallback
+else {
+	window.ig.setAnimation = function( callback ) {
+		return window.setInterval( callback, 1000/60 );
+	};
+	window.ig.clearAnimation = function( id ) {
+		window.clearInterval( id );
+	};
+}
+
+
+// -----------------------------------------------------------------------------
+// Class object based on John Resigs code; inspired by base2 and Prototype
+// http://ejohn.org/blog/simple-javascript-inheritance/
+
+var initializing = false, fnTest = /xyz/.test(function(){xyz;}) ? /\bparent\b/ : /.*/;
+var lastClassId = 0;
+
+window.ig.Class = function(){};
+var inject = function(prop) {	
+	var proto = this.prototype;
+	var parent = {};
+	for( var name in prop ) {		
+		if( 
+			typeof(prop[name]) == "function" &&
+			typeof(proto[name]) == "function" && 
+			fnTest.test(prop[name])
+		) {
+			parent[name] = proto[name]; // save original function
+			proto[name] = (function(name, fn){
+				return function() {
+					var tmp = this.parent;
+					this.parent = parent[name];
+					var ret = fn.apply(this, arguments);			 
+					this.parent = tmp;
+					return ret;
+				};
+			})( name, prop[name] );
+		}
+		else {
+			proto[name] = prop[name];
+		}
+	}
+};
+
+window.ig.Class.extend = function(prop) {
+	var parent = this.prototype;
+ 
+	initializing = true;
+	var prototype = new this();
+	initializing = false;
+ 
+	for( var name in prop ) {
+		if( 
+			typeof(prop[name]) == "function" &&
+			typeof(parent[name]) == "function" && 
+			fnTest.test(prop[name])
+		) {
+			prototype[name] = (function(name, fn){
+				return function() {
+					var tmp = this.parent;
+					this.parent = parent[name];
+					var ret = fn.apply(this, arguments);			 
+					this.parent = tmp;
+					return ret;
+				};
+			})( name, prop[name] );
+		}
+		else {
+			prototype[name] = prop[name];
+		}
+	}
+ 
+	function Class() {
+		if( !initializing ) {
+			
+			// If this class has a staticInstantiate method, invoke it
+			// and check if we got something back. If not, the normal
+			// constructor (init) is called.
+			if( this.staticInstantiate ) {
+				var obj = this.staticInstantiate.apply(this, arguments);
+				if( obj ) {
+					return obj;
+				}
+			}
+			for( var p in this ) {
+				if( typeof(this[p]) == 'object' ) {
+					this[p] = ig.copy(this[p]); // deep copy!
+				}
+			}
+			if( this.init ) {
+				this.init.apply(this, arguments);
+			}
+		}
+		return this;
+	}
+	
+	Class.prototype = prototype;
+	Class.prototype.constructor = Class;
+	Class.extend = window.ig.Class.extend;
+	Class.inject = inject;
+	Class.classId = prototype.classId = ++lastClassId;
+	
+	return Class;
+};
+
+// Merge the ImpactMixin - if present - into the 'ig' namespace. This gives other
+// code the chance to modify 'ig' before it's doing any work.
+if( window.ImpactMixin ) {
+	ig.merge(ig, window.ImpactMixin);
+}
+
+})(window);
+
+
+// -----------------------------------------------------------------------------
+// UI › Doc
+
+(function() {
+let HTMLElementProxy = class HTMLElementProxy {
+	constructor(elements) {
+		this.elements = elements;
+		this.length = elements.length;
+	}
+
+	_propertyProperty(p1, p2, value) {
+		if (value !== undefined) {
+			for (let i = 0; i < this.length; i++) {
+				this.elements[i][p1][p2] = value;
+			}
+			return this;
+		}
+		else {
+			return this.length ? this.elements[0][p1][p2] : null;
+		}
+	}
+
+	_propertyFunction(p, func, args) {
+		for (let i = 0; i < this.length; i++) {
+			this.elements[i][p][func].apply(this.elements[i][p], args);
+		}
+		return this;
+	}
+
+	_function(func, args) {
+		for (let i = 0; i < this.length; i++) {
+			this.elements[i][func].apply(this.elements[i], args);
+		}
+		return this;
+	}
+	
+	_setChildNodes(func, value) {
+		let nodes = ig.doc(value);
+		for (let i = 0; i < this.length; i++) {
+			for (let j = 0; j < nodes.length; j++) {
+				let node = nodes.elements[j];
+				this.elements[i][func]( i > 0 ? node.cloneNode() : node);
+			}
+		}
+		return this;
+	}
+
+	el() {
+		return this.length ? this.elements[0] : null;
+	}
+
+	prop(p, value) {
+		if (value !== undefined) {
+			for (let i = 0; i < this.length; i++) {
+				this.elements[i][p] = value;
+			}
+			return this;
+		}
+		else {
+			return this.length ? this.elements[0][p] : '';
+		}
+	}
+
+	style(name, value) {
+		return this._propertyProperty('style', name, value);
+	}
+
+	show() {
+		return this._propertyProperty('style', 'display', 'block');
+	}
+
+	hide() {
+		return this._propertyProperty('style', 'display', 'none');
+	}
+
+	on(event, callback) {
+		return this._function('addEventListener', [event, callback]);
+	}
+
+	off(event, callback) {
+		return this._function('removeEventListener', [event, callback]);	
+	}
+
+	attr(name, value) {
+		if (value !== undefined) {
+			return this._function('setAttribute', [name, value]);
+		}
+		else {
+			return this.length ? this.elements[0].getAttribute(name) : null;
+		}
+	}
+
+	checked(value) {
+		return this.prop('checked', value);
+	}
+
+	val(value) {
+		return this.prop('value', value);
+	}
+
+	html(value) {
+		return this.prop('innerHTML', value);
+	}
+
+	clear() {
+		return this._function('replaceChildren', []);	
+	}
+
+	text(value) {
+		return this.prop('textContent', value);
+	}
+
+	addClass(name) {
+		return this._propertyFunction('classList', 'add', [name]);
+	}
+
+	removeClass(name) {
+		return this._propertyFunction('classList', 'remove', [name]);
+	}
+
+	toggleClass(name, force) {
+		return this._propertyFunction('classList', 'toggle', [name, force]);
+	}
+
+	hasClass(name) {
+		return this.length ? this.elements[0].classList.contains(name) : false;
+	}
+
+	width() {
+		return this.length ? this.elements[0].offsetWidth : null;
+	}
+
+	height() {
+		return this.length ? this.elements[0].offsetHeight : null;
+	}
+
+	focus() {
+		return this._function('focus', []);
+	}
+
+	blur() {
+		return this._function('blur', []);
+	}
+
+	select() {
+		for (let i = 0; i < this.elements.length; i++) {
+			this.elements[i].setSelectionRange(0, this.elements[i].value.length);
+		}
+		return this;
+	}
+
+	click() {
+		for (let i = 0; i < this.elements.length; i++) {
+			this.elements[i].click();
+		}
+		return this;
+	}
+
+	append(value) {
+		return this._setChildNodes('append', value);
+	}
+	
+	prepend(value) {
+		return this._setChildNodes('prepend', value);
+	}
+
+	remove() {
+		return this._function('remove', []);
+	}
+
+	children() {
+		let nodes = [];
+		for (let i = 0; i < this.length; i++) {
+			let nodeList = this.elements[i].childNodes;
+			nodes = nodes.concat(Array.prototype.slice.call(nodeList));
+		}
+		return ig.doc(nodes);
+	}
+
+	find(selector) {
+		let nodes = [];
+		for (let i = 0; i < this.length; i++) {
+			let nodeList = this.elements[i].querySelectorAll(selector)
+			nodes = nodes.concat(Array.prototype.slice.call(nodeList));
+		}
+		return ig.doc(nodes);
+	}
+};
+
+ig.doc = function(selector) {
+	let elements = [];
+	if (typeof(selector) === 'string') {
+		let nodeList = window.document.querySelectorAll(selector);
+		elements = Array.prototype.slice.call(nodeList);
+	}
+	else if (selector instanceof(NodeList)) {
+		elements = Array.prototype.slice.call(nodeList);
+	}
+	else if (Array.isArray(selector)) {
+		elements = selector;
+	}
+	else if (selector instanceof(HTMLElement) || selector === window) {
+		elements.push(selector);
+	}
+	else if (selector instanceof(HTMLElementProxy)) {
+		return selector;
+	}
+
+	return new HTMLElementProxy(elements);
+};
+
+ig.doc.create = function(type) {
+	return new HTMLElementProxy([window.document.createElement(type)]);
+};
+
+// Shorthands
+ig.$ = ig.doc;
+ig.$new = ig.doc.create;
+
+})();
+
+
+ig.Entity = ig.Class.extend({
+	id: 0,
+	settings: {},
+	
+	size: {x: 8, y:8},
+	offset: {x: 0, y: 0},
+	
+	pos: {x: 0, y:0},
+	name: null,
+	type: 'unknown',
+
+	editor: {
+		color: 'rgba(128, 192, 128, 0.9)',
+		resize: false,
+	},
+	
+	init: function( x, y, settings ) {
+		this.id = ++ig.Entity._lastId;
+		this.pos.x = x;
+		this.pos.y = y;
+		
+		ig.merge(this, settings);
+	},
+
+	touches: function( other ) {
+		var padding = this.editor.resize && this === ig.editor.entities.selectedEntity ? 4 : 0;
+		return !(
+			this.pos.x >= other.pos.x + other.size.x + padding ||
+			this.pos.x + this.size.x <= other.pos.x  - padding ||
+			this.pos.y >= other.pos.y + other.size.y + padding ||
+			this.pos.y + this.size.y <= other.pos.y  - padding  
+		);
+	},
+});
+
+
+// -----------------------------------------------------------------------------
+// The main() function creates the system, input, sound and game objects,
+// creates a preloader and starts the run loop
+
+
+ig.System = ig.Class.extend({
+	fps: 30,
+	width: 320,
+	height: 240,
+	realWidth: 320,
+	realHeight: 240,
+	scale: 1,
+	
+	tick: 0,
+	animationId: 0,
+	newGameClass: null,
+	running: false,
+	
+	delegate: null,
+	clock: null,
+	canvas: null,
+	context: null,
+	
+	init: function( canvasId, fps, width, height, scale ) {
+		this.fps = fps;
+		
+		this.canvas = ig.$(canvasId).el();
+		this.resize( width, height, scale );
+		this.context = this.canvas.getContext('2d');
+		this.context.imageSmoothingEnabled = false;
+		
+		this.getDrawPos = ig.System.drawMode;
+
+		// Automatically switch to crisp scaling when using a scale
+		// other than 1
+		if( this.scale != 1 ) {
+			ig.System.scaleMode = ig.System.SCALE.CRISP;
+		}
+		ig.System.scaleMode( this.canvas, this.context );
+	},
+	
+	
+	resize: function( width, height, scale ) {
+		this.width = width;
+		this.height = height;
+		this.scale = scale || this.scale;
+		
+		this.realWidth = this.width * this.scale;
+		this.realHeight = this.height * this.scale;
+		this.canvas.width = this.realWidth;
+		this.canvas.height = this.realHeight;
+		if (this.context) {
+			this.context.imageSmoothingEnabled = false;
+		}
+	},
+	
+	
+	clear: function( color ) {
+		this.context.fillStyle = color;
+		this.context.fillRect( 0, 0, this.realWidth, this.realHeight );
+	},
+	
+	
+	getDrawPos: null // Set through constructor
+});
+
+ig.System.DRAW = {
+	AUTHENTIC: function( p ) { return Math.round(p) * this.scale; },
+	SMOOTH: function( p ) { return Math.round(p * this.scale); },
+	SUBPIXEL: function( p ) { return p * this.scale; }
+};
+ig.System.drawMode = ig.System.DRAW.SMOOTH;
+
+ig.System.SCALE = {
+	CRISP: function( canvas, context ) {
+		canvas.style.imageRendering = 'pixelated';
+	},
+	SMOOTH: function( canvas, context ) {
+		canvas.style.imageRendering = '';
+		canvas.style.msInterpolationMode = '';
+	}
+};
+ig.System.scaleMode = ig.System.SCALE.CRISP;
+
+
+ig.KEY = {
+	'MOUSE1': -1,
+	'MOUSE2': -3,
+	'MWHEEL_UP': -4,
+	'MWHEEL_DOWN': -5,
+	
+	'BACKSPACE': 8,
+	'TAB': 9,
+	'ENTER': 13,
+	'PAUSE': 19,
+	'CAPS': 20,
+	'ESC': 27,
+	'SPACE': 32,
+	'PAGE_UP': 33,
+	'PAGE_DOWN': 34,
+	'END': 35,
+	'HOME': 36,
+	'LEFT_ARROW': 37,
+	'UP_ARROW': 38,
+	'RIGHT_ARROW': 39,
+	'DOWN_ARROW': 40,
+	'INSERT': 45,
+	'DELETE': 46,
+	'_0': 48,
+	'_1': 49,
+	'_2': 50,
+	'_3': 51,
+	'_4': 52,
+	'_5': 53,
+	'_6': 54,
+	'_7': 55,
+	'_8': 56,
+	'_9': 57,
+	'A': 65,
+	'B': 66,
+	'C': 67,
+	'D': 68,
+	'E': 69,
+	'F': 70,
+	'G': 71,
+	'H': 72,
+	'I': 73,
+	'J': 74,
+	'K': 75,
+	'L': 76,
+	'M': 77,
+	'N': 78,
+	'O': 79,
+	'P': 80,
+	'Q': 81,
+	'R': 82,
+	'S': 83,
+	'T': 84,
+	'U': 85,
+	'V': 86,
+	'W': 87,
+	'X': 88,
+	'Y': 89,
+	'Z': 90,
+	'NUMPAD_0': 96,
+	'NUMPAD_1': 97,
+	'NUMPAD_2': 98,
+	'NUMPAD_3': 99,
+	'NUMPAD_4': 100,
+	'NUMPAD_5': 101,
+	'NUMPAD_6': 102,
+	'NUMPAD_7': 103,
+	'NUMPAD_8': 104,
+	'NUMPAD_9': 105,
+	'MULTIPLY': 106,
+	'ADD': 107,
+	'SUBSTRACT': 109,
+	'DECIMAL': 110,
+	'DIVIDE': 111,
+	'F1': 112,
+	'F2': 113,
+	'F3': 114,
+	'F4': 115,
+	'F5': 116,
+	'F6': 117,
+	'F7': 118,
+	'F8': 119,
+	'F9': 120,
+	'F10': 121,
+	'F11': 122,
+	'F12': 123,
+	'SHIFT': 16,
+	'CTRL': 17,
+	'ALT': 18,
+	'PLUS': 187,
+	'COMMA': 188,
+	'MINUS': 189,
+	'PERIOD': 190
+};
+
+
+ig.Input = ig.Class.extend({
+	bindings: {},
+	actions: {},
+	presses: {},
+	locks: {},
+	delayedKeyup: {},
+	
+	isUsingMouse: false,
+	isUsingKeyboard: false,
+	isUsingAccelerometer: false,
+	mouse: {x: 0, y: 0},
+	accel: {x: 0, y: 0, z: 0},
+	
+	
+	initMouse: function() {
+		if( this.isUsingMouse ) { return; }
+		this.isUsingMouse = true;
+		ig.system.canvas.addEventListener('wheel', this.mousewheel.bind(this), false );
+		
+		ig.system.canvas.addEventListener('contextmenu', this.contextmenu.bind(this), false );
+		ig.system.canvas.addEventListener('mousedown', this.keydown.bind(this), false );
+		window.addEventListener('mouseup', this.keyup.bind(this), false );
+		ig.system.canvas.addEventListener('mousemove', this.mousemove.bind(this), false );
+		
+		if( ig.ua.touchDevice ) {
+			// Standard
+			ig.system.canvas.addEventListener('touchstart', this.keydown.bind(this), false );
+			ig.system.canvas.addEventListener('touchend', this.keyup.bind(this), false );
+			ig.system.canvas.addEventListener('touchcancel', this.keyup.bind(this), false );
+			ig.system.canvas.addEventListener('touchmove', this.mousemove.bind(this), false );
+			
+			// MS
+			ig.system.canvas.addEventListener('MSPointerDown', this.keydown.bind(this), false );
+			ig.system.canvas.addEventListener('MSPointerUp', this.keyup.bind(this), false );
+			ig.system.canvas.addEventListener('MSPointerMove', this.mousemove.bind(this), false );
+			ig.system.canvas.style.msTouchAction = 'none';
+		}
+	},
+
+	
+	initKeyboard: function() {
+		if( this.isUsingKeyboard ) { return; }
+		this.isUsingKeyboard = true;
+		window.addEventListener('keydown', this.keydown.bind(this), false );
+		window.addEventListener('keyup', this.keyup.bind(this), false );
+	},
+	
+	
+	initAccelerometer: function() {
+		if( this.isUsingAccelerometer ) { return; }
+		this.isUsingAccelerometer = true;
+		window.addEventListener('devicemotion', this.devicemotion.bind(this), false );
+	},
+
+	
+	mousewheel: function( event ) {
+		var code = event.deltaY < 0 ? ig.KEY.MWHEEL_UP : ig.KEY.MWHEEL_DOWN;
+		var action = this.bindings[code];
+		if( action ) {
+			this.actions[action] = true;
+			this.presses[action] = true;
+			this.delayedKeyup[action] = true;
+			event.stopPropagation();
+			event.preventDefault();
+		}
+	},
+	
+	
+	mousemove: function( event ) {		
+		var internalWidth = ig.system.canvas.offsetWidth || ig.system.realWidth;
+		var scale = ig.system.scale * (internalWidth / ig.system.realWidth);
+		
+		var pos = {left: 0, top: 0};
+		if( ig.system.canvas.getBoundingClientRect ) {
+			pos = ig.system.canvas.getBoundingClientRect();
+		}
+		
+		var ev = event.touches ? event.touches[0] : event;
+		this.mouse.x = (ev.clientX - pos.left) / scale;
+		this.mouse.y = (ev.clientY - pos.top) / scale;
+	},
+	
+	
+	contextmenu: function( event ) {
+		if( this.bindings[ig.KEY.MOUSE2] ) {
+			event.stopPropagation();
+			event.preventDefault();
+		}
+	},
+	
+	
+	keydown: function( event ) {
+		var tag = event.target.tagName;
+		if( tag == 'INPUT' || tag == 'TEXTAREA' ) { return; }
+		
+		var code = event.type == 'keydown' 
+			? event.keyCode 
+			: (event.button == 2 ? ig.KEY.MOUSE2 : ig.KEY.MOUSE1);
+		
+		// Focus window element for mouse clicks. Prevents issues when
+		// running the game in an iframe.
+		if( code < 0 && !ig.ua.mobile ) {
+			window.focus();
+		}
+		
+		if( event.type == 'touchstart' || event.type == 'mousedown' ) {
+			this.mousemove( event );
+		}
+			
+		var action = this.bindings[code];
+		if( action ) {
+			this.actions[action] = true;
+			if( !this.locks[action] ) {
+				this.presses[action] = true;
+				this.locks[action] = true;
+			}
+			event.preventDefault();
+		}
+	},
+	
+	
+	keyup: function( event ) {
+		var tag = event.target.tagName;
+		if( tag == 'INPUT' || tag == 'TEXTAREA' ) { return; }
+		
+		var code = event.type == 'keyup' 
+			? event.keyCode 
+			: (event.button == 2 ? ig.KEY.MOUSE2 : ig.KEY.MOUSE1);
+		
+		var action = this.bindings[code];
+		if( action ) {
+			this.delayedKeyup[action] = true;
+			event.preventDefault();
+		}
+	},
+	
+	
+	devicemotion: function( event ) {
+		this.accel = event.accelerationIncludingGravity;
+	},
+	
+	
+	bind: function( key, action ) {
+		if( key < 0 ) { this.initMouse(); }
+		else if( key > 0 ) { this.initKeyboard(); }
+		this.bindings[key] = action;
+	},
+	
+	
+	bindTouch: function( selector, action ) {
+		var element = ig.$(selector);
+		element.on('touchstart', (ev) => this.touchStart(ev, action), false);
+		element.on('touchend', (ev) => this.touchEnd(ev, action), false);
+		element.on('MSPointerDown', (ev) => this.touchStart(ev, action), false);
+		element.on('MSPointerUp', (ev) => this.touchEnd(ev, action), false);
+	},
+	
+	
+	unbind: function( key ) {
+		var action = this.bindings[key];
+		this.delayedKeyup[action] = true;
+		
+		this.bindings[key] = null;
+	},
+	
+	
+	unbindAll: function() {
+		this.bindings = {};
+		this.actions = {};
+		this.presses = {};
+		this.locks = {};
+		this.delayedKeyup = {};
+	},
+	
+	
+	state: function( action ) {
+		return this.actions[action];
+	},
+	
+	
+	pressed: function( action ) {
+		return this.presses[action];
+	},
+	
+	released: function( action ) {
+		return !!this.delayedKeyup[action];
+	},
+		
+	clearPressed: function() {
+		for( var action in this.delayedKeyup ) {
+			this.actions[action] = false;
+			this.locks[action] = false;
+		}
+		this.delayedKeyup = {};
+		this.presses = {};
+	},
+	
+	touchStart: function( event, action ) {
+		this.actions[action] = true;
+		this.presses[action] = true;
+		
+		event.stopPropagation();
+		event.preventDefault();
+		return false;
+	},
+	
+	
+	touchEnd: function( event, action ) {
+		this.delayedKeyup[action] = true;
+		event.stopPropagation();
+		event.preventDefault();
+		return false;
+	}
+});
+
+ig.Image = ig.Class.extend({
+	data: null,
+	width: 0,
+	height: 0,
+	loaded: false,
+	failed: false,
+	loadCallback: null,
+	path: '',
+	
+	
+	staticInstantiate: function( path ) {
+		return ig.Image.cache[path] || null;
+	},
+	
+	
+	init: function( pathOrImage ) {
+		if (
+			pathOrImage instanceof HTMLCanvasElement ||
+			pathOrImage instanceof HTMLImageElement
+		) {
+			this.data = pathOrImage;
+			this.width = this.data.width;
+			this.height = this.data.height;
+			this.loaded = true;
+		}
+		else {
+			this.path = pathOrImage;
+			this.load();
+		}
+	},
+	
+	
+	load: function( loadCallback ) {
+		if( this.loaded ) {
+			if( loadCallback ) {
+				loadCallback( this.path, true );
+			}
+			return;
+		}
+		else if( !this.loaded && ig.ready ) {
+			this.loadCallback = loadCallback || null;
+			var file = ig.editor.project.load(this.path, (err, file) => {
+				if (err) {
+					this.onerror(null);
+					return;
+				}
+				this.data = new Image();
+				this.data.onload = this.onload.bind(this);
+				this.data.onerror = this.onerror.bind(this);
+				this.data.src = URL.createObjectURL(file);
+			});
+		}
+		
+		ig.Image.cache[this.path] = this;
+	},
+	
+	
+	reload: function() { 
+		this.loaded = false;
+		this.data = new Image();
+		this.data.onload = this.onload.bind(this);
+		this.data.src = this.path + '?' + Date.now();
+	},
+	
+	
+	onload: function( event ) {
+		this.width = this.data.width;
+		this.height = this.data.height;
+		this.loaded = true;
+		
+		if( this.loadCallback ) {
+			this.loadCallback( this.path, true );
+		}
+	},
+	
+	
+	onerror: function( event ) {
+		this.failed = true;
+		
+		if( this.loadCallback ) {
+			this.loadCallback( this.path, false );
+		}
+	},
+	
+	
+	draw: function( targetX, targetY, sourceX, sourceY, width, height ) {
+		if( !this.loaded ) { return; }
+		
+		// var scale = ig.system.scale;
+		sourceX = sourceX ? sourceX : 0;
+		sourceY = sourceY ? sourceY : 0;
+		width = (width ? width : this.width);
+		height = (height ? height : this.height);
+		
+		ig.system.context.drawImage( 
+			this.data, sourceX, sourceY, width, height,
+			ig.system.getDrawPos(targetX), 
+			ig.system.getDrawPos(targetY),
+			width * ig.system.scale, height * ig.system.scale
+		);
+		
+		ig.Image.drawCount++;
+	},
+	
+	
+	drawTile: function( targetX, targetY, tile, tileWidth, tileHeight, flipX, flipY ) {
+		tileHeight = tileHeight ? tileHeight : tileWidth;
+		
+		if( !this.loaded || tileWidth > this.width || tileHeight > this.height ) { return; }
+		
+		var scale = ig.system.scale;
+		var tileWidthScaled = Math.floor(tileWidth * scale);
+		var tileHeightScaled = Math.floor(tileHeight * scale);
+		
+		var scaleX = flipX ? -1 : 1;
+		var scaleY = flipY ? -1 : 1;
+		
+		if( flipX || flipY ) {
+			ig.system.context.save();
+			ig.system.context.scale( scaleX, scaleY );
+		}
+		ig.system.context.drawImage( 
+			this.data, 
+			( Math.floor(tile * tileWidth) % this.width ),
+			( Math.floor(tile * tileWidth / this.width) * tileHeight ),
+			tileWidth,
+			tileHeight,
+			ig.system.getDrawPos(targetX) * scaleX - (flipX ? tileWidthScaled : 0), 
+			ig.system.getDrawPos(targetY) * scaleY - (flipY ? tileHeightScaled : 0),
+			tileWidthScaled,
+			tileHeightScaled
+		);
+		if( flipX || flipY ) {
+			ig.system.context.restore();
+		}
+		
+		ig.Image.drawCount++;
+	}
+});
+
+ig.Image.drawCount = 0;
+ig.Image.cache = {};
+ig.Image.reloadCache = function() {
+	for( var path in ig.Image.cache ) {
+		ig.Image.cache[path].reload();
+	}
+};
+
+ig.Map = ig.Class.extend({
+	tilesize: 8,
+	width: 1,
+	height: 1,
+	pxWidth: 1,
+	pxHeight: 1,
+	data: [[]],
+	name: null,
+	
+	
+	init: function( tilesize, data ) {
+		this.tilesize = tilesize;
+		this.data = data;
+		this.height = data.length;
+		this.width = data[0].length;
+
+		this.pxWidth = this.width * this.tilesize;
+		this.pxHeight = this.height * this.tilesize;
+	},
+	
+	
+	getTile: function( x, y ) {
+		var tx = Math.floor( x / this.tilesize );
+		var ty = Math.floor( y / this.tilesize );
+		if( 
+			(tx >= 0 && tx <  this.width) &&
+			(ty >= 0 && ty < this.height)
+		) {
+			return this.data[ty][tx];
+		} 
+		else {
+			return 0;
+		}
+	},
+	
+	
+	setTile: function( x, y, tile ) {
+		var tx = Math.floor( x / this.tilesize );
+		var ty = Math.floor( y / this.tilesize );
+		if( 
+			(tx >= 0 && tx < this.width) &&
+			(ty >= 0 && ty < this.height)
+		) {
+			this.data[ty][tx] = tile;
+		}
+	}
+});
+
+
+
+
+(function(){
+	// Default Slope Tile definition. Each tile is defined by an array of 5 vars:
+	// - 4 for the line in tile coordinates (0 -- 1)
+	// - 1 specifing whether the tile is 'filled' behind the line or not
+	// [ x1, y1, x2, y2, solid ]
+
+	// Defining 'half', 'one third' and 'two thirds' as vars  makes it a bit
+	// easier to read... I hope.
+
+	let H = 1/2;
+	let N = 1/3;
+	let M = 2/3;
+	let S = 1; // Solid
+	let NON_S = 0; // Non-Solid
+		
+	let SlopeDefinitionSetup = {	
+		/* 15 NE */	 5: [0,1, 1,M, S],  6: [0,M, 1,N, S],  7: [0,N, 1,0, S],
+		/* 22 NE */	 3: [0,1, 1,H, S],  4: [0,H, 1,0, S],
+		/* 45 NE */  2: [0,1, 1,0, S],
+		/* 67 NE */ 10: [H,1, 1,0, S], 21: [0,1, H,0, S],
+		/* 75 NE */ 32: [M,1, 1,0, S], 43: [N,1, M,0, S], 54: [0,1, N,0, S],
+		
+		/* 15 SE */	27: [0,0, 1,N, S], 28: [0,N, 1,M, S], 29: [0,M, 1,1, S],
+		/* 22 SE */	25: [0,0, 1,H, S], 26: [0,H, 1,1, S],
+		/* 45 SE */	24: [0,0, 1,1, S],
+		/* 67 SE */	11: [0,0, H,1, S], 22: [H,0, 1,1, S],
+		/* 75 SE */	33: [0,0, N,1, S], 44: [N,0, M,1, S], 55: [M,0, 1,1, S],
+		
+		/* 15 NW */	16: [1,N, 0,0, S], 17: [1,M, 0,N, S], 18: [1,1, 0,M, S],
+		/* 22 NW */	14: [1,H, 0,0, S], 15: [1,1, 0,H, S],
+		/* 45 NW */	13: [1,1, 0,0, S],
+		/* 67 NW */	 8: [H,1, 0,0, S], 19: [1,1, H,0, S],
+		/* 75 NW */	30: [N,1, 0,0, S], 41: [M,1, N,0, S], 52: [1,1, M,0, S],
+		
+		/* 15 SW */ 38: [1,M, 0,1, S], 39: [1,N, 0,M, S], 40: [1,0, 0,N, S],
+		/* 22 SW */ 36: [1,H, 0,1, S], 37: [1,0, 0,H, S],
+		/* 45 SW */ 35: [1,0, 0,1, S],
+		/* 67 SW */  9: [1,0, H,1, S], 20: [H,0, 0,1, S],
+		/* 75 SW */ 31: [1,0, M,1, S], 42: [M,0, N,1, S], 53: [N,0, 0,1, S],
+		
+		/* One way N */ 12: [0,0, 1,0, NON_S],
+		/* One way S */ 23: [1,1, 0,1, NON_S],
+		/* One way E */ 34: [1,0, 1,1, NON_S],
+		/* One way W */ 45: [0,1, 0,0, NON_S]
+	};
+
+
+	// Calculate the line vectors (instead of start & end points) and the line
+	// normal and construct the actual SlopeDefinition objects.
+
+	let SlopeDefinition = {};
+	for (let t in SlopeDefinitionSetup) {
+		let def = SlopeDefinitionSetup[t];
+
+		let vx = def[2] - def[0],
+			vy = def[3] - def[1];
+
+		let length = Math.sqrt(vx * vx + vy * vy);
+
+		SlopeDefinition[t] = {
+			x: def[0], y: def[1],
+			vx: vx, vy: vy,
+			solid: def[4],
+			normalX: vy/length, normalY: -vx/length
+		};
+	}
+
+	ig.CollisionSlopes = SlopeDefinition;
+
+})();
+
+
+
+
+ig.BackgroundMap = ig.Map.extend({	
+	tiles: null,
+	scroll: {x: 0, y:0},
+	distance: 1,
+	repeat: false,
+	tilesetName: '',
+	foreground: false,
+	enabled: true,
+
+	
+	
+	init: function( tilesize, data, tileset ) {
+		this.parent( tilesize, data );
+		this.setTileset( tileset );
+	},
+	
+	
+	setTileset: function( tileset ) {
+		this.tilesetName  = tileset instanceof ig.Image ? tileset.path : tileset;
+		this.tiles = new ig.Image( this.tilesetName );
+	},
+	
+	
+	setScreenPos: function( x, y ) {
+		this.scroll.x = x / this.distance;
+		this.scroll.y = y / this.distance;
+	},
+	
+	
+	drawTiled: function() {
+		if( !this.tiles.loaded || !this.enabled ) {
+			return;
+		}
+		
+		var tile = 0,
+			anim = null,
+			tileOffsetX = (this.scroll.x / this.tilesize)|0,
+			tileOffsetY = (this.scroll.y / this.tilesize)|0,
+			pxOffsetX = this.scroll.x % this.tilesize,
+			pxOffsetY = this.scroll.y % this.tilesize,
+			pxMinX = -pxOffsetX - this.tilesize,
+			pxMinY = -pxOffsetY - this.tilesize,
+			pxMaxX = ig.system.width + this.tilesize - pxOffsetX,
+			pxMaxY = ig.system.height + this.tilesize - pxOffsetY;
+			
+		
+		// FIXME: could be sped up for non-repeated maps: restrict the for loops
+		// to the map size instead of to the screen size and skip the 'repeat'
+		// checks inside the loop.
+		
+		for( var mapY = -1, pxY = pxMinY; pxY < pxMaxY; mapY++, pxY += this.tilesize) {
+			var tileY = mapY + tileOffsetY;
+				
+			// Repeat Y?
+			if( tileY >= this.height || tileY < 0 ) {
+				if( !this.repeat ) { continue; }
+				tileY = (tileY%this.height + this.height) % this.height;
+			}
+			
+			for( var mapX = -1, pxX = pxMinX; pxX < pxMaxX; mapX++, pxX += this.tilesize ) {
+				var tileX = mapX + tileOffsetX;
+				
+				// Repeat X?
+				if( tileX >= this.width || tileX < 0 ) {
+					if( !this.repeat ) { continue; }
+					tileX = (tileX%this.width + this.width) % this.width;
+				}
+				
+				// Draw!
+				if( (tile = this.data[tileY][tileX]) ) {
+					this.tiles.drawTile( pxX, pxY, tile-1, this.tilesize );
+				}
+			} // end for x
+		} // end for y
+	}
+});
+
+
+wm.EditEntities = ig.Class.extend({
+	visible: true,
+	active: true,
+	
+	hotkey: -1,
+	ignoreLastClick: false,
+	name: 'entities',
+	
+	entities: [],
+	namedEntities: {},
+	selectedEntity: null,
+	entityTypes: {},
+	selector: {size:{x:2, y:2}, pos:{x:0,y:0}, offset:{x:0,y:0}},
+	wasSelectedOnScaleBorder: false,
+	gridSize: wm.config.entityGrid,
+
+	$div: null,
+	$menu: null,
+	$entityDefinitions: null,	
+	
+	init: function( $div ) {
+		this.$div = $div;
+		$div.on( 'mouseup', this.click.bind(this) );
+		$div.find('.visible').on( 'click', this.toggleVisibilityClick.bind(this) );
+		
+		this.$menu = ig.$('#entityMenu');
+		this.$entityDefinitions = ig.$('#entityDefinitions');
+		
+		ig.$('#entityKey').on( 'keydown', function(ev){ 
+			if( ev.which == 13 ){ 
+				ig.$('#entityValue').focus(); 
+				return false;
+			}
+			return true;
+		});
+		ig.$('#entityValue').on( 'keydown', this.setEntitySettingFromKeypress.bind(this) );
+		ig.$('#buttonEntityDefinition').on( 'click', this.setEntitySetting.bind(this) );
+	},
+	
+	
+	clear: function() {
+		this.entities = [];
+		this.selectEntity( null );
+	},
+	
+	
+	sort: function() {
+		this.entities.sort( function( a, b ){ return a.zIndex - b.zIndex; } );
+	},
+	
+	
+	
+	
+	// -------------------------------------------------------------------------
+	// Loading, Saving
+	
+	
+	clearEntityTypes: function() {
+		this.$menu.clear();
+		this.entityTypes = {};
+	},
+
+	addEntityType: function(type, file) {
+		
+
+		let def = {
+			size: {x: 8, y: 8},
+			color: wm.config.project.defaultEntityColor,
+			resize: false
+		};
+
+		if (file) {
+			if (file.match(/EDITOR_IGNORE\(\s*true\s*\)/)) {
+				return;
+			}
+
+			let sm = file.match(/EDITOR_SIZE\(\s*(\d+)\s*,\s*(\d+)\s*\)/)
+			if (sm) {
+				def.size.x = parseInt(sm[1]);
+				def.size.y = parseInt(sm[2]);
+			}
+
+			let cm = file.match(/EDITOR_COLOR\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*\)/)
+			if (cm) {
+				def.color = 'rgba('+cm[1]+','+cm[2]+','+cm[3]+',0.9'+')';
+			}
+
+			if (file.match(/EDITOR_RESIZE\(\s*true\s*\)/)) {
+				def.resize = true;
+			}
+		}
+
+		var a = ig.$new('div')
+			.attr('id', type)
+			.attr('href', '#')
+			.text(type)
+			.on('mouseup', this.newEntityClick.bind(this));
+
+		this.$menu.append(a);
+		this.entityTypes[type] = def;
+	},
+	
+	
+	getEntityByName: function( name ) {
+		return this.namedEntities[name];
+	},
+	
+	
+	getSaveData: function() {
+		var ents = [];
+		for( var i = 0; i < this.entities.length; i++ ) {
+			var ent = this.entities[i];
+			var type = ent.type;
+			var data = {type:type,x:ent.pos.x,y:ent.pos.y};
+			
+			var hasSettings = false;
+			for( var p in ent.settings ) {
+				hasSettings = true;
+			}
+			if( hasSettings ) {
+				data.settings = ent.settings;
+			}
+			
+			ents.push( data );
+		}
+		return ents;
+	},		
+	
+	
+	
+	
+	// -------------------------------------------------------------------------
+	// Selecting
+	
+	
+	selectEntityAt: function( x, y ) {
+		this.selector.pos = { x: x, y: y };
+		
+		// Find all possible selections
+		var possibleSelections = [];
+		for( var i = 0; i < this.entities.length; i++ ) {
+			if( this.entities[i].touches(this.selector) ) {
+				possibleSelections.push( this.entities[i] );
+			}
+		}
+		
+		// Nothing found? Early out.
+		if( !possibleSelections.length ) {
+			this.selectEntity( null );
+			return false;
+		}
+		
+		// Find the 'next' selection
+		var selectedIndex = possibleSelections.indexOf(this.selectedEntity);
+		var nextSelection = (selectedIndex + 1) % possibleSelections.length;
+		var ent = possibleSelections[nextSelection];
+		
+		// Select it!
+		this.selector.offset = {
+			x: (x - ent.pos.x + ent.offset.x),
+			y: (y - ent.pos.y + ent.offset.y)
+		};
+		this.selectEntity( ent );
+		this.wasSelectedOnScaleBorder = this.isOnScaleBorder( ent, this.selector );
+		return ent;
+	},
+	
+	
+	selectEntity: function( entity ) {
+		if( entity && entity != this.selectedEntity ) {
+			this.selectedEntity = entity;
+			ig.$('#entitySettings').hide();
+			this.loadEntitySettings();
+			ig.$('#entitySettings').show();
+		} 
+		else if( !entity ) {
+			ig.$('#entitySettings').hide();
+			ig.$('#entityKey').blur();
+			ig.$('#entityValue').blur();
+		}
+		
+		this.selectedEntity = entity;
+		ig.$('#entityKey').val('');
+		ig.$('#entityValue').val('');
+	},
+	
+	
+
+	
+	// -------------------------------------------------------------------------
+	// Creating, Deleting, Moving
+	
+	
+	deleteSelectedEntity: function() {
+		if( !this.selectedEntity ) {
+			return false;
+		}
+		
+		ig.game.undo.commitEntityDelete( this.selectedEntity );
+		
+		this.removeEntity( this.selectedEntity );
+		this.selectEntity( null );
+		return true;
+	},
+	
+	
+	removeEntity: function( ent ) {
+		if( ent.name ) {
+			delete this.namedEntities[ent.name];
+		}
+		ig.arrayRemove(this.entities, ent);
+	},
+	
+	
+	cloneSelectedEntity: function() {
+		if( !this.selectedEntity ) {
+			return false;
+		}
+		
+		var type = this.selectedEntity.type;
+		var settings = ig.copy(this.selectedEntity.settings);
+		if( settings.name ) {
+			settings.name = settings.name + '_clone';
+		}
+		var x = this.selectedEntity.pos.x + this.gridSize;
+		var y = this.selectedEntity.pos.y;
+		var newEntity = this.spawnEntity( type, x, y, settings );
+		var def = this.entityTypes[type];
+		if (def) {
+			newEntity.editor = def;
+		}
+		this.selectEntity( newEntity );
+		
+		ig.game.undo.commitEntityCreate( newEntity );
+		
+		return true;
+	},
+	
+	
+	dragOnSelectedEntity: function( x, y ) {
+		if( !this.selectedEntity ) {
+			return false;
+		}
+		
+		
+		// scale or move?
+		if( this.selectedEntity.editor.resize && this.wasSelectedOnScaleBorder ) {
+			this.scaleSelectedEntity( x, y );	
+		}
+		else {
+			this.moveSelectedEntity( x, y )
+		}
+		
+		ig.game.undo.pushEntityEdit( this.selectedEntity );
+		return true;
+	},
+	
+	
+	moveSelectedEntity: function( x, y ) {
+		var ox = this.selectedEntity.size.x - Math.floor(this.selectedEntity.size.x / this.gridSize) * this.gridSize;
+		var oy = this.selectedEntity.size.y - Math.floor(this.selectedEntity.size.y / this.gridSize) * this.gridSize;
+		x = 
+			Math.round( (x - this.selector.offset.x ) / this.gridSize )
+			* this.gridSize - ox;
+		y = 
+			Math.round( (y - this.selector.offset.y ) / this.gridSize )
+			* this.gridSize - oy;
+		
+		// new position?
+		if( this.selectedEntity.pos.x != x || this.selectedEntity.pos.y != y ) {
+			ig.$('#entityDefinitionPosX').text( x );
+			ig.$('#entityDefinitionPosY').text( y );
+			
+			this.selectedEntity.pos.x = x;
+			this.selectedEntity.pos.y = y;
+		}
+	},
+	
+	
+	scaleSelectedEntity: function( x, y ) {
+		var scale = this.wasSelectedOnScaleBorder;
+			
+		var w = Math.round( x / this.gridSize ) * this.gridSize - this.selectedEntity.pos.x;
+		
+		if( !this.selectedEntity.settings.size ) {
+			this.selectedEntity.settings.size = {};
+		}
+		
+		if( scale == 'n' ) {
+			var h = this.selectedEntity.pos.y - Math.round( y / this.gridSize ) * this.gridSize;
+			if( this.selectedEntity.size.y + h <= this.gridSize ) {
+				h = (this.selectedEntity.size.y - this.gridSize) * -1;
+			}
+			this.selectedEntity.size.y += h;
+			this.selectedEntity.pos.y -= h;
+		}
+		else if( scale == 's' ) {
+			var h = Math.round( y / this.gridSize ) * this.gridSize - this.selectedEntity.pos.y;
+			this.selectedEntity.size.y = Math.max( this.gridSize, h );
+		}
+		else if( scale == 'e' ) {
+			var w = Math.round( x / this.gridSize ) * this.gridSize - this.selectedEntity.pos.x;
+			this.selectedEntity.size.x = Math.max( this.gridSize, w );
+		}
+		else if( scale == 'w' ) {
+			var w = this.selectedEntity.pos.x - Math.round( x / this.gridSize ) * this.gridSize;
+			if( this.selectedEntity.size.x + w <= this.gridSize ) {
+				w = (this.selectedEntity.size.x - this.gridSize) * -1;
+			}
+			this.selectedEntity.size.x += w;
+			this.selectedEntity.pos.x -= w;
+		}
+		this.selectedEntity.settings.size.x = this.selectedEntity.size.x;
+		this.selectedEntity.settings.size.y = this.selectedEntity.size.y;
+		
+		this.loadEntitySettings();
+	},
+	
+	
+	newEntityClick: function( ev ) {
+		this.hideMenu();
+		var newEntity = this.spawnEntity( ev.target.id, 0, 0, {} );
+		this.selectEntity( newEntity );
+		this.selector.offset.x = this.selector.offset.y = 0;
+		this.moveSelectedEntity( this.selector.pos.x, this.selector.pos.y );
+		ig.editor.setModified();
+		
+		ig.game.undo.commitEntityCreate( newEntity );
+	},
+	
+	
+	spawnEntity: function( type, x, y, settings ) {
+		settings = settings || {};
+		var newEntity = new ig.Entity( x, y, settings );
+		newEntity.type = type;
+		newEntity.settings = {};
+		for( var s in settings ) {
+			newEntity.settings[s] = settings[s];
+		}
+		
+		var def = this.entityTypes[type];
+		if (def) {
+			newEntity.editor = def;
+			if (!settings || !settings.size) {
+				newEntity.size = ig.copy(def.size);
+			}
+		}
+
+		this.entities.push( newEntity );
+		if( settings.name ) {
+			this.namedEntities[settings.name] = newEntity;
+		}
+		this.sort();
+		return newEntity;
+	},
+	
+	
+	isOnScaleBorder: function( entity, selector ) {	
+		var border = 2;
+		var w = selector.pos.x - entity.pos.x;
+		var h = selector.pos.y - entity.pos.y;
+		
+		if( w < border ) return 'w';
+		if( w > entity.size.x - border ) return 'e';
+		
+		if( h < border ) return 'n';
+		if( h > entity.size.y - border ) return 's';
+		
+		return false;
+	},
+	
+	
+	
+	
+	// -------------------------------------------------------------------------
+	// Settings
+	
+	
+	loadEntitySettings: function() {
+		
+		if( !this.selectedEntity ) {
+			return;
+		}
+		var html = 
+			'<div class="entityDefinition"><span class="key">x</span><span class="value" id="entityDefinitionPosX">'+this.selectedEntity.pos.x+'</span></div>'
+			+ '<div class="entityDefinition"><span class="key">y</span><span class="value" id="entityDefinitionPosY">'+this.selectedEntity.pos.y+'</span></div>';
+		
+		html += this.loadEntitySettingsRecursive( this.selectedEntity.settings );
+		this.$entityDefinitions.html( html );
+		
+		ig.$('#entityClass').text( this.selectedEntity.type );
+		
+		ig.$('.entityDefinition').on( 'click', this.selectEntitySetting );
+	},
+	
+	
+	loadEntitySettingsRecursive: function( settings, path ) {
+		path = path || "";
+		var html = "";
+		for( var key in settings ) {
+			var value = settings[key];
+			if( typeof(value) == 'object' ) {
+				html += this.loadEntitySettingsRecursive( value, path + key + "." );
+			}
+			else {
+				html += '<div class="entityDefinition"><span class="key">'+path+key+'</span><span class="value">'+value+'</span></div>';
+			}
+		}
+		
+		return html;
+	},
+	
+	
+	setEntitySettingFromKeypress: function( ev ) {
+		if( ev.which != 13 ) {
+			return true;
+		}
+		this.setEntitySetting(ev);
+	},
+
+	setEntitySetting: function( ev ) {
+		
+		var key = ig.$('#entityKey').val();
+		var value = ig.$('#entityValue').val();
+		var floatVal = parseFloat(value);
+		if( value == floatVal ) {
+			value = floatVal;
+		}
+		
+		if( key == 'name' ) {
+			if( this.selectedEntity.name ) {
+				delete this.namedEntities[this.selectedEntity.name];
+			}
+			this.namedEntities[ value ] = this.selectedEntity;
+		}
+		
+		if( key == 'x' ) {
+			this.selectedEntity.pos.x = Math.round(value);
+		}
+		else if( key == 'y' ) {
+			this.selectedEntity.pos.y = Math.round(value);
+		}
+		else {
+			this.writeSettingAtPath( this.selectedEntity.settings, key, value );
+			ig.merge( this.selectedEntity, this.selectedEntity.settings );
+		}
+		
+		this.sort();
+		
+		ig.game.setModified();
+		ig.game.draw();
+		
+		ig.$('#entityKey').val('');
+		ig.$('#entityValue').val('');
+		ig.$('#entityValue').blur();
+		this.loadEntitySettings();
+		
+		ig.$('#entityKey').focus();
+		return false;
+	},
+	
+	
+	writeSettingAtPath: function( root, path, value ) {
+		path = path.split('.');
+		var cur = root;
+		for( var i = 0; i < path.length; i++ ) {
+			var n = path[i];
+			if( i < path.length-1 && typeof(cur[n]) != 'object' ) {
+				cur[n] = {};
+			}
+			
+			if( i == path.length-1 ) {
+				cur[n] = value;
+			}
+			cur = cur[n];		
+		}
+		
+		this.trimObject( root );
+	},
+	
+	
+	trimObject: function( obj ) {
+		var isEmpty = true;
+		for( var i in obj ) {
+			if(
+			   (obj[i] === "") ||
+			   (typeof(obj[i]) == 'object' && this.trimObject(obj[i]))
+			) {
+				delete obj[i];
+			}
+			
+			if( typeof(obj[i]) != 'undefined' ) {
+				isEmpty = false;
+			}
+		}
+		
+		return isEmpty;
+	},
+	
+	
+	selectEntitySetting: function( ev ) {
+		ig.$('#entityKey').val( ig.$(ev.currentTarget).find('.key').text() );
+		ig.$('#entityValue').val( ig.$(ev.currentTarget).find('.value').text() );
+		ig.$('#entityValue').focus().select();
+	},
+	
+	
+	
+	
+	
+	
+	// -------------------------------------------------------------------------
+	// UI
+	
+	setHotkey: function( hotkey ) {
+		this.hotkey = hotkey;
+		this.$div.attr('title', 'Select Layer ('+this.hotkey+')' );
+	},
+	
+	
+	showMenu: function( x, y ) {
+		this.selector.pos = { 
+			x: Math.round( (x + ig.editor.screen.x) / this.gridSize ) * this.gridSize, 
+			y: Math.round( (y + ig.editor.screen.y) / this.gridSize ) * this.gridSize
+		};
+		this.$menu.style('top', (y * ig.system.scale + 2) + 'px');
+		this.$menu.style('left', (x * ig.system.scale + 2) + 'px');
+		this.$menu.show();
+	},
+	
+	
+	hideMenu: function() {
+		ig.editor.mode = ig.editor.MODE.DEFAULT;
+		this.$menu.hide();
+	},
+	
+	
+	setActive: function( active ) {
+		this.active = active;
+		if( active ) {
+			this.$div.addClass( 'layerActive' );
+		} else {
+			this.$div.removeClass( 'layerActive' );
+		}
+	},
+	
+	
+	toggleVisibility: function() {
+		this.visible ^= 1;
+		if( this.visible ) {
+			this.$div.find('.visible').addClass('checkedVis');
+		} else {
+			this.$div.find('.visible').removeClass('checkedVis');
+		}
+		ig.game.draw();
+	},
+	
+	
+	toggleVisibilityClick: function( ev ) {
+		if( !this.active ) {
+			this.ignoreLastClick = true;
+		}
+		this.toggleVisibility()
+	},
+	
+	
+	click: function() {
+		if( this.ignoreLastClick ) {
+			this.ignoreLastClick = false;
+			return;
+		}
+		ig.editor.setActiveLayer( 'entities' );
+	},
+	
+	
+	mousemove: function( x, y ) {
+		this.selector.pos = { x: x, y: y };
+		
+		if( this.selectedEntity ) {
+			if( this.selectedEntity.editor.resize && this.selectedEntity.touches(this.selector, 8) ) {
+				var scale = this.isOnScaleBorder( this.selectedEntity, this.selector );
+				if( scale == 'n' || scale == 's' ) {
+					document.body.style.cursor = 'ns-resize';
+					return;
+				}
+				else if( scale == 'e' || scale == 'w' ) {
+					document.body.style.cursor = 'ew-resize';
+					return;
+				}
+			}
+		}
+		
+		document.body.style.cursor = 'default';
+	},
+	
+	
+	
+	
+	
+	
+	// -------------------------------------------------------------------------
+	// Drawing
+	
+	
+	draw: function() {
+		if( this.visible ) {
+			for( var i = 0; i < this.entities.length; i++ ) {
+				this.drawEntity( this.entities[i] );
+			}
+		}
+	},
+	
+	
+	drawEntity: function( ent ) {
+		var ctx = ig.system.context;
+		if (!this.active) {
+			ctx.globalAlpha = 0.5;
+		}
+		// entity itself
+		// ent.draw();
+		
+		// box
+		// if( ent._wmDrawBox ) {
+			ctx.fillStyle = ent.editor.color || wm.config.project.defaultEntityColor;
+			ctx.fillRect(
+				ig.system.getDrawPos(ent.pos.x - ig.game.screen.x),
+				ig.system.getDrawPos(ent.pos.y - ig.game.screen.y), 
+				ent.size.x * ig.system.scale, 
+				ent.size.y * ig.system.scale
+			);
+		// }
+		
+		
+		if( wm.config.labels.draw ) {
+			// description
+			var className = ent.type;
+			var description = className + (ent.name ? ': ' + ent.name : '' );
+			
+			// Text box
+			var ts = ctx.measureText(description);
+			var x = ig.system.getDrawPos(ent.pos.x - ig.game.screen.x)
+			var y = ig.system.getDrawPos(ent.pos.y - ig.game.screen.y)
+
+			ctx.fillStyle = wm.config.colors.labelbg;
+			ctx.fillRect(
+				x - ts.actualBoundingBoxLeft - 2, 
+				y + ts.actualBoundingBoxAscent - 2,
+				ts.actualBoundingBoxLeft + ts.actualBoundingBoxRight + 4,
+				ts.actualBoundingBoxAscent + ts.actualBoundingBoxDescent + 4,
+			);
+			
+			// text
+			ctx.fillStyle = wm.config.colors.primary;
+			ctx.fillText(description, x, y);
+		}
+
+		
+		// line to targets
+		if( typeof(ent.target) == 'object' ) {
+			for( var t in ent.target ) {
+				this.drawLineToTarget( ent, ent.target[t] );
+			}
+		}
+		if (!this.active) {
+			ctx.globalAlpha = 1;
+		}
+	},
+
+	
+	drawLineToTarget: function( ent, target ) {
+		target = ig.game.getEntityByName( target );
+		if( !target ) {
+			return;
+		}
+		
+		ig.system.context.strokeStyle = '#fff';
+		ig.system.context.lineWidth = 1;
+		
+		ig.system.context.beginPath();
+		ig.system.context.moveTo(
+			ig.system.getDrawPos(ent.pos.x + ent.size.x/2 - ig.game.screen.x),
+			ig.system.getDrawPos(ent.pos.y + ent.size.y/2 - ig.game.screen.y)
+		);
+		ig.system.context.lineTo(
+			ig.system.getDrawPos(target.pos.x + target.size.x/2 - ig.game.screen.x),
+			ig.system.getDrawPos(target.pos.y + target.size.y/2 - ig.game.screen.y)
+		);
+		ig.system.context.stroke();
+		ig.system.context.closePath();
+	},
+	
+	
+	drawCursor: function( x, y ) {
+		if( this.selectedEntity ) {
+			ig.system.context.lineWidth = 1;
+			ig.system.context.strokeStyle = wm.config.colors.highlight;
+			ig.system.context.strokeRect( 
+				ig.system.getDrawPos(this.selectedEntity.pos.x - ig.editor.screen.x) - 0.5, 
+				ig.system.getDrawPos(this.selectedEntity.pos.y - ig.editor.screen.y) - 0.5, 
+				this.selectedEntity.size.x * ig.system.scale + 1, 
+				this.selectedEntity.size.y * ig.system.scale + 1
+			);
+		}
+	}
+});
+
+wm.EditMap = ig.BackgroundMap.extend({
+	name: '',
+	visible: true,
+	active: true,
+	isCollision: false,
+	linkWithCollision: false,
+	
+	$div: null,
+	brush: [[0]],
+	oldData: null,
+	hotkey: -1,
+	ignoreLastClick: false,
+	tileSelect: null,
+	
+	isSelecting: false,
+	selectionBegin: null,
+	collisionTileSize: null,
+	
+	init: function( name, tilesize, tileset, foreground ) {
+		this.name = name;
+		if (this.name === 'collision') {
+			this.isCollision = true;
+		}
+
+		this.parent( tilesize, [[0]], tileset || '' );
+		this.foreground = foreground;
+		
+		this.$div = ig.$new('div')
+			.addClass('layer')
+			.addClass('layerActive')
+			.attr('id', 'layer_'+name)
+			.on('click', this.click.bind(this));
+		this.setName( name );
+		if( this.foreground ) {
+			ig.$('#layers').prepend( this.$div );
+		}
+		else {
+			ig.$('#layerEntities').el().insertAdjacentElement('afterend', this.$div.el() );
+		}
+		
+		this.tileSelect = new wm.TileSelect( this );
+	},
+	
+	
+	getSaveData: function() {
+		return {
+			name: this.name,
+			width: this.width,
+			height: this.height,
+			linkWithCollision: this.linkWithCollision,
+			visible: this.visible,
+			tilesetName: this.isCollision ? null : this.tilesetName.replace(/\.png$/, '.qoi'),
+			repeat: this.repeat,
+			distance: this.distance,
+			tilesize: this.tilesize,
+			foreground: this.foreground,
+			data: this.data
+		};
+	},
+	
+	
+	resize: function( newWidth, newHeight ) {
+		var newData = new Array( newHeight );
+		for( var y = 0; y < newHeight; y++ ) {
+			newData[y] = new Array( newWidth );
+			for( var x = 0; x < newWidth; x++ ) {
+				newData[y][x] = (x < this.width && y < this.height) ? this.data[y][x] : 0;
+			}
+		}
+		this.data = newData;
+		this.width = newWidth;
+		this.height = newHeight;
+		
+		this.resetDiv();
+	},
+	
+	beginEditing: function() {
+		this.oldData = ig.copy(this.data);
+	},
+	
+	getOldTile: function( x, y ) {
+		var tx = Math.floor( x / this.tilesize );
+		var ty = Math.floor( y / this.tilesize );
+		if( 
+			(tx >= 0 && tx < this.width) &&
+			(ty >= 0 && ty < this.height)
+		) {
+			return this.oldData[ty][tx];
+		} 
+		else {
+			return 0;
+		}
+	},
+	
+	setTileset: function( tileset ) {
+		if( this.name != 'collision' ) {
+			this.parent( tileset );
+		}
+	},
+
+	
+	
+	
+	
+	
+	// -------------------------------------------------------------------------
+	// UI
+	
+	setHotkey: function( hotkey ) {
+		this.hotkey = hotkey;
+		this.setName( this.name );
+	},
+	
+	
+	setName: function( name ) {
+		this.name = name.replace(/[^0-9a-zA-Z]/g, '_');
+		this.resetDiv();
+	},
+	
+	
+	resetDiv: function() {
+		var visClass = this.visible ? ' checkedVis' : '';
+		this.$div.html(
+			'<span class="visible'+visClass+'" title="Toggle Visibility (Shift+'+this.hotkey+')"></span>' +
+			'<span class="name">' + this.name + '</span>' +
+			'<span class="size"> (' + this.width + 'x' + this.height + ')</span>' +
+			'<span class="layerMove" title="Move layer"></span>'
+		);
+		this.$div.attr('title', 'Select Layer ('+this.hotkey+')' );
+		this.$div.find('.visible').on('click', this.toggleVisibilityClick.bind(this) );
+	},
+	
+	
+	setActive: function( active ) {
+		this.active = active;
+		if( active ) {
+			this.$div.addClass( 'layerActive' );
+		} else {
+			this.$div.removeClass( 'layerActive' );
+		}
+	},
+	
+	
+	toggleVisibility: function() {
+		this.visible = !this.visible;
+		this.resetDiv();
+		if( this.visible ) {
+			this.$div.find('.visible').addClass('checkedVis');
+		} else {
+			this.$div.find('.visible').removeClass('checkedVis');
+		}
+		ig.game.draw();
+	},
+	
+	
+	toggleVisibilityClick: function( event ) {
+		if( !this.active ) {
+			this.ignoreLastClick = true;
+		}
+		this.toggleVisibility()
+	},
+	
+	
+	click: function() {
+		if( this.ignoreLastClick ) {
+			this.ignoreLastClick = false;
+			return;
+		}
+		ig.editor.setActiveLayer( this.name );
+	},
+	
+	
+	destroy: function() {
+		this.$div.remove();
+	},
+	
+	
+	
+	// -------------------------------------------------------------------------
+	// Selecting
+	
+	beginSelecting: function( x, y ) {
+		this.isSelecting = true;
+		this.selectionBegin = {x:x, y:y};
+	},
+	
+		
+	endSelecting: function( x, y ) {
+		var r = this.getSelectionRect( x, y);
+		
+		var brush = [];
+		for( var ty = r.y; ty < r.y+r.h; ty++ ) {
+			var row = [];
+			for( var tx = r.x; tx < r.x+r.w; tx++ ) {
+				if( tx < 0 || ty < 0 || tx >= this.width || ty >= this.height ) {
+					row.push( 0 );
+				}
+				else {
+					row.push( this.data[ty][tx] );
+				}
+			}
+			brush.push( row );
+		}
+		this.isSelecting = false;
+		this.selectionBegin = null;
+		return brush;
+	},
+	
+	
+	getSelectionRect: function( x, y ) {
+		var sx = this.selectionBegin ? this.selectionBegin.x : x,
+			sy = this.selectionBegin ? this.selectionBegin.y : y;
+			
+		var
+			txb = Math.floor( (sx + this.scroll.x) / this.tilesize ),
+			tyb = Math.floor( (sy + this.scroll.y) / this.tilesize ),
+			txe = Math.floor( (x + this.scroll.x) / this.tilesize ),
+			tye = Math.floor( (y + this.scroll.y) / this.tilesize );
+		
+		return {
+			x: Math.min( txb, txe ),
+			y: Math.min( tyb, tye ),
+			w: Math.abs( txb - txe) + 1,
+			h: Math.abs( tyb - tye) + 1
+		}
+	},	
+	
+	
+	
+
+	// -------------------------------------------------------------------------
+	// Drawing
+	
+	draw: function() {
+		if (this.isCollision && this.tilesize !== this.collisionTileSize) {
+			this.tiles = this.createCollisionTileset(
+				this.tilesize,
+				ig.CollisionSlopes,
+				11, 5, wm.config.colors.collision
+			);
+
+			this.collisionTileSize = this.tilesize;
+		}
+
+		// For performance reasons, repeated background maps are not drawn
+		// when zoomed out
+		if( this.visible && !(wm.config.view.zoom < 1 && this.repeat) ) {
+			this.drawTiled();
+		}
+		
+		// Grid
+		if( this.active && wm.config.view.grid ) {
+			
+			var x = -ig.system.getDrawPos(this.scroll.x % this.tilesize) - 0.5;
+			var y = -ig.system.getDrawPos(this.scroll.y % this.tilesize) - 0.5;
+			var step = this.tilesize * ig.system.scale;
+			
+			ig.system.context.beginPath();
+			for( x; x < ig.system.realWidth; x += step ) {
+				ig.system.context.moveTo( x, 0 );
+				ig.system.context.lineTo( x, ig.system.realHeight );
+			}
+			for( y; y < ig.system.realHeight; y += step ) {
+				ig.system.context.moveTo( 0, y );
+				ig.system.context.lineTo( ig.system.realWidth, y );
+			}
+			ig.system.context.strokeStyle = wm.config.colors.secondary;
+			ig.system.context.stroke();
+			ig.system.context.closePath();
+			
+			// Not calling beginPath() again has some weird performance issues
+			// in Firefox 5. closePath has no effect. So to make it happy:
+			ig.system.context.beginPath(); 
+		}
+		
+		// Bounds
+		if( this.active ) {
+			ig.system.context.lineWidth = 1;
+			ig.system.context.strokeStyle = wm.config.colors.primary;
+			ig.system.context.strokeRect( 
+				-ig.system.getDrawPos(this.scroll.x) - 0.5, 
+				-ig.system.getDrawPos(this.scroll.y) - 0.5, 
+				this.width * this.tilesize * ig.system.scale + 1, 
+				this.height * this.tilesize * ig.system.scale + 1
+			);			
+		}
+	},
+	
+	getCursorOffset: function() {
+		var w = this.brush[0].length;
+		var h = this.brush.length;
+		
+		//return {x:0, y:0};
+		return {
+			x: ((w/2-0.5)|0) * this.tilesize,
+			y: ((h/2-0.5)|0) * this.tilesize
+		}
+	},
+	
+	drawCursor: function( x, y ) {
+		if( this.isSelecting ) {
+			var r = this.getSelectionRect( x, y);
+		
+			ig.system.context.lineWidth = 1;
+			ig.system.context.strokeStyle = wm.config.colors.selection;
+			ig.system.context.strokeRect( 
+				(r.x * this.tilesize - this.scroll.x) * ig.system.scale - 0.5, 
+				(r.y * this.tilesize - this.scroll.y) * ig.system.scale - 0.5, 
+				r.w * this.tilesize * ig.system.scale + 1, 
+				r.h * this.tilesize * ig.system.scale + 1
+			);
+		}
+		else {
+			var w = this.brush[0].length;
+			var h = this.brush.length;
+			
+			var co = this.getCursorOffset();
+			
+			var cx = Math.floor( (x+this.scroll.x) / this.tilesize ) * this.tilesize - this.scroll.x - co.x;
+			var cy = Math.floor( (y+this.scroll.y) / this.tilesize ) * this.tilesize - this.scroll.y - co.y;
+			
+			ig.system.context.lineWidth = 1;
+			ig.system.context.strokeStyle = wm.config.colors.primary;
+			ig.system.context.strokeRect( 
+				ig.system.getDrawPos(cx)-0.5, 
+				ig.system.getDrawPos(cy)-0.5, 
+				w * this.tilesize * ig.system.scale + 1, 
+				h * this.tilesize * ig.system.scale + 1
+			);
+			
+			ig.system.context.globalAlpha = 0.5;
+			for( var ty = 0; ty < h; ty++ ) {
+				for( var tx = 0; tx < w; tx++ ) {
+					var t = this.brush[ty][tx];
+					if( t ) {
+						var px = cx + tx * this.tilesize;
+						var py = cy + ty * this.tilesize;
+						this.tiles.drawTile( px, py, t-1, this.tilesize );
+					}
+				}
+			}
+			ig.system.context.globalAlpha = 1;
+		}
+	},
+
+	createCollisionTileset: function(tilesize, defs, cols, rows, color) {
+		// Create the Canvas for the tileset
+		let canvas = document.createElement('canvas');
+		canvas.width = cols * tilesize;
+		canvas.height = rows * tilesize;
+		let ctx = canvas.getContext('2d');
+
+		// Create checkerboard fill pattern
+		let patternCanvas = document.createElement('canvas');
+		patternCanvas.width = tilesize;
+		patternCanvas.height = tilesize;
+		let pctx = patternCanvas.getContext('2d');
+
+		let ts2 = tilesize/2;
+		pctx.fillStyle = color.primary;
+		pctx.fillRect(0,0,ts2,ts2);
+		pctx.fillRect(ts2,ts2,ts2,ts2);
+		pctx.fillStyle = color.secondary;
+		pctx.fillRect(ts2,0, ts2,ts2);
+		pctx.fillRect(0,ts2,ts2,ts2);
+
+		let fill = ctx.createPattern(patternCanvas, "repeat");
+
+		// Fill zeroth tile (fully solid)
+		ctx.fillStyle = fill;
+		ctx.fillRect(0, 0, tilesize, tilesize);
+
+		for (let x = 0; x < cols; x++) {
+			for (let y = 0; y < rows; y++ ) {
+				ctx.save();
+				ctx.translate(x * tilesize, y * tilesize);
+
+				let def = defs[y * cols + x + 1];
+				if (def) {
+					this.drawCollisionTile(
+						def, tilesize, ctx, fill, color.indicator
+					);
+				}
+				else if (y !== 0 && x !== 0) {
+					// Mark tile as invalid
+					ctx.beginPath();
+					ctx.moveTo(tilesize * 0.2, tilesize * 0.2);
+					ctx.lineTo(tilesize * 0.8, tilesize * 0.8);
+					ctx.moveTo(tilesize * 0.8, tilesize * 0.2);
+					ctx.lineTo(tilesize * 0.2, tilesize * 0.8);
+					ctx.strokeStyle = '#444';
+					ctx.stroke();
+				}
+				ctx.restore();
+			}
+		}
+		return new ig.Image(canvas);
+	},
+
+	drawCollisionTile: function(def, tilesize, ctx, fill, indicator) {
+		let x = def.x * tilesize,
+			y = def.y * tilesize,
+			vx = def.vx * tilesize,
+			vy = def.vy * tilesize;
+
+		ctx.fillStyle = fill;
+		ctx.beginPath();
+		ctx.moveTo(x, y);
+		ctx.lineTo(x + vx, y + vy);
+
+		if (def.solid) {
+			if (Math.abs(vx) > Math.abs(vy)) {
+				let py = vy !== 0 ? (vx > 0 ? tilesize : 0) : tilesize - y;
+				ctx.lineTo(x + vx, py);
+				ctx.lineTo(x, py);
+			}
+			else {
+				let px = vx !== 0 ? (vy > 0 ? 0 : tilesize) : tilesize - x ;
+				ctx.lineTo(px, y + vy);
+				ctx.lineTo(px, y);
+			}
+			ctx.closePath();
+			ctx.fill();
+		}
+		else {
+			let nx = - def.normalX * tilesize * 0.125,
+				ny = - def.normalY * tilesize * 0.125;
+			ctx.lineTo(x + vx + nx, y + vy + ny);
+			ctx.lineTo(x + nx, y + ny);
+			ctx.closePath();
+			ctx.fill();
+
+			// Draw arrows
+			ctx.beginPath();
+			ctx.moveTo(x + vx * 0.25 + nx, y + vy * 0.25 + ny);
+			ctx.lineTo(x + vx * 0.5 + nx * 2.0, y + vy * 0.5 + ny * 2.0);
+			ctx.lineTo(x + nx * 2.0, y + ny * 2.0);
+			ctx.closePath();
+
+			ctx.moveTo(x + vx * 0.75 + nx, y + vy * 0.75 + ny);
+			ctx.lineTo(x + vx * 0.5 + nx * 2.0, y + vy * 0.5 + ny * 2.0);
+			ctx.lineTo(x + vx * 1.0 + nx * 2.0, y + vy * 1.0 + ny * 2.0);
+			ctx.closePath();
+
+			ctx.fillStyle = indicator;
+			ctx.fill();
+		}
+	}
+});
+
+
+wm.EventedInput = ig.Input.extend({
+	mousemoveCallback: null,
+	keyupCallback: null,
+	keydownCallback: null,
+	
+	delayedKeyup: {push:function(){},length: 0},
+	
+	
+	keydown: function( event ) {
+		var tag = event.target.tagName;
+		if( tag == 'INPUT' || tag == 'TEXTAREA' ) { return; }
+		
+		var code = event.type == 'keydown' 
+			? event.keyCode 
+			: (event.button == 2 ? ig.KEY.MOUSE2 : ig.KEY.MOUSE1);
+		var action = this.bindings[code];
+		if( action ) {
+			if( !this.actions[action] ) {
+				this.actions[action] = true;
+				if( this.keydownCallback ) {
+					this.keydownCallback( action );
+				}
+			}
+			event.stopPropagation();
+			event.preventDefault();
+		}
+	},
+	
+	
+	keyup: function( event ) {
+		var tag = event.target.tagName;
+		if( tag == 'INPUT' || tag == 'TEXTAREA' ) { return; }
+		
+		var code = event.type == 'keyup' 
+			? event.keyCode 
+			: (event.button == 2 ? ig.KEY.MOUSE2 : ig.KEY.MOUSE1);
+		var action = this.bindings[code];
+		if( action ) {
+			this.actions[action] = false;
+			if( this.keyupCallback ) {
+				this.keyupCallback( action );
+			}
+			event.stopPropagation();
+			event.preventDefault();
+		}
+	},
+	
+	
+	mousewheel: function( event ) {
+		var delta = event.wheelDelta ? event.wheelDelta : (event.detail * -1);
+		var code = delta > 0 ? ig.KEY.MWHEEL_UP : ig.KEY.MWHEEL_DOWN;
+		var action = this.bindings[code];
+		if( action ) {
+			if( this.keyupCallback ) {
+				this.keyupCallback( action );
+			}
+			event.stopPropagation();
+			event.preventDefault();
+		}
+	},
+	
+	
+	mousemove: function( event ) {
+		this.parent( event );
+		if( this.mousemoveCallback ) {
+			this.mousemoveCallback();
+		}
+	}
+});
+
+wm.ModalDialog = ig.Class.extend({
+	onOk: null,
+	onCancel: null,
+
+	text: '',
+	okText: '',
+	cancelText: '',
+	
+	$background: null,
+	$dialogBox: null,
+	$buttonDiv: null,
+	
+	init: function( text, okText, cancelText ) {
+		this.text = text;
+		this.okText = okText || 'OK';
+		this.cancelText = cancelText || 'Cancel';
+	
+		this.$background = ig.$new('div').addClass('modalDialogBackground');
+		this.$dialogBox = ig.$new('div').addClass('modalDialogBox');
+		this.$background.append( this.$dialogBox );
+		ig.$(document.body).append( this.$background );
+		
+		this.initDialog();
+	},
+	
+	
+	initDialog: function() {
+		this.$buttonDiv = ig.$new('div').addClass('modalDialogButtons');
+		var $okButton = ig.$new('input').addClass('button').attr('type', 'button').val(this.okText);
+		var $cancelButton = ig.$new('input').addClass('button').attr('type', 'button').val(this.cancelText);
+		
+		$okButton.on( 'click', this.clickOk.bind(this) );
+		$cancelButton.on( 'click', this.clickCancel.bind(this) );
+		
+		this.$buttonDiv.append($okButton).append($cancelButton);
+		
+		this.$dialogBox.append(ig.$new('div').addClass('modalDialogText').text(this.text));
+		this.$dialogBox.append(this.$buttonDiv);
+	},
+	
+	
+	clickOk: function() {
+		if( this.onOk ) { this.onOk(this); }
+		this.close();
+	},
+	
+	
+	clickCancel: function() {
+		if( this.onCancel ) { this.onCancel(this); }
+		this.close();
+	},
+	
+	
+	open: function() {
+		this.$background.show();
+	},
+	
+	
+	close: function() {
+		this.$background.hide();
+	}
+});
+
+
+
+wm.ModalDialogPathSelect = wm.ModalDialog.extend({
+	pathDropdown: null,
+	$pathInput: null,
+	filter: null,
+	
+	init: function( text, okText, filter = null) {
+		this.filter = filter;
+		this.parent( text, (okText || 'Select') );
+	},
+	
+	
+	setPath: function( path ) {
+		var dir = path.replace(/\/[^\/]*$/, '');
+		this.$pathInput.val( path );
+		this.pathDropdown.loadDir( dir );
+	},
+	
+	
+	initDialog: function() {
+		this.parent();
+		this.$pathInput = ig.$new('input').attr('type', 'text').addClass('modalDialogPath');
+		this.$buttonDiv.el().insertAdjacentElement('beforebegin', this.$pathInput.el());
+		this.pathDropdown = new wm.SelectFileDropdown( this.$pathInput, this.filter );
+	},
+	
+	
+	clickOk: function() {
+		if( this.onOk ) { 
+			this.onOk(this, this.$pathInput.val()); 
+		}
+		this.close();
+	}
+});
+
+wm.SelectFileDropdown = ig.Class.extend({
+	$input: null,
+	$div: null,
+	boundShow: null,
+	boundHide: null,
+	filter: null,
+	
+	init: function( elementId, filter = null ) {
+		this.filter = filter || '';
+		this.$input = ig.$(elementId);
+		this.boundHide = this.hide.bind(this);
+		this.$input.on('focus', this.show.bind(this) );
+		
+		this.$div = ig.$new('div').addClass('selectFileDialog');
+		var $wrap = ig.$new('div').addClass('selectFileDialogWrap').append(this.$div);
+		this.$input.el().insertAdjacentElement('afterend', $wrap.el());
+		this.$div.on('mousedown', this.noHide.bind(this) );
+	},
+	
+	
+	loadDir: function( dir ) {
+		if (ig.editor.project) {
+			ig.editor.project.ls(dir, this.filter, this.showFiles.bind(this));
+		}
+	},
+	
+	
+	selectDir: function( ev ) {
+		this.loadDir( ig.$(ev.target).attr('href') );
+		return false;
+	},
+	
+	
+	selectFile: function( ev ) {
+		this.$input.val( ig.$(ev.target).attr('href') );
+		this.$input.blur();
+		this.hide();
+		return false;
+	},
+	
+	
+	showFiles: function( error, data ) {
+		if (error) {
+			alert(error); // FIXME: use html dialog
+			return;
+		}
+		this.$div.clear();
+		if( data.parent !== false ) {
+			var $parentDir = ig.$new('span').addClass('dir').attr('href', data.parent).text('…parent directory');
+			$parentDir.on( 'click', this.selectDir.bind(this) );
+			this.$div.append( $parentDir );
+		}
+		for( var i = 0; i < data.dirs.length; i++ ) {
+			var name = data.dirs[i].match(/[^\/]*$/)[0] + '/';
+			var $dir = ig.$new('span').addClass('dir').attr('href', data.dirs[i]).text(name);
+			$dir.on( 'click', this.selectDir.bind(this) );
+			this.$div.append( $dir );
+		}
+		for( var i = 0; i < data.files.length; i++ ) {
+			var name = data.files[i].match(/[^\/]*$/)[0];
+			var $file = ig.$new('span').addClass('file').attr('href', data.files[i]).text(name);
+			$file.on( 'click', this.selectFile.bind(this) );
+			this.$div.append( $file );
+		}
+	},
+	
+	
+	noHide: function(ev) {
+		ev.stopPropagation();
+	},
+	
+	
+	show: function( ev ) {
+		ig.$(window).on( 'mousedown', this.boundHide );
+		this.$div.style('width', (this.$input.width())+'px');
+		this.$div.show();
+	},
+	
+	
+	hide: function() {
+		ig.$(window).off( 'mousedown', this.boundHide );
+		this.$div.hide();
+	}
+});
+
+wm.TileSelect = ig.Class.extend({
+	
+	pos: {x:0, y:0},
+	
+	layer: null,
+	selectionBegin: null,
+	
+	init: function( layer ) {
+		this.layer = layer;
+	},
+	
+	
+	getCurrentTile: function() {
+		var b = this.layer.brush;
+		if( b.length == 1 && b[0].length == 1 ) {
+			return b[0][0] - 1;
+		}
+		else {
+			return -1;
+		}
+	},
+	
+	
+	setPosition: function( x, y ) {
+		this.selectionBegin = null;
+		var tile = this.getCurrentTile();
+		this.pos.x = 
+			Math.floor( x / this.layer.tilesize ) * this.layer.tilesize 
+			- Math.floor( tile * this.layer.tilesize ) % this.layer.tiles.width;
+			
+		this.pos.y = 
+			Math.floor( y / this.layer.tilesize ) * this.layer.tilesize 
+			- Math.floor( tile * this.layer.tilesize / this.layer.tiles.width ) * this.layer.tilesize
+			- (tile == -1 ? this.layer.tilesize : 0);
+			
+		this.pos.x = ig.clamp(this.pos.x, 0, ig.system.width - this.layer.tiles.width - (ig.system.width % this.layer.tilesize));
+		this.pos.y = ig.clamp(this.pos.y, 0, ig.system.height - this.layer.tiles.height - (ig.system.height % this.layer.tilesize));
+	},
+	
+	
+	beginSelecting: function( x, y ) {
+		this.selectionBegin = {x:x, y:y};
+	},
+	
+		
+	endSelecting: function( x, y ) {
+		var r = this.getSelectionRect( x, y);
+		
+		var mw = Math.floor( this.layer.tiles.width / this.layer.tilesize );
+		var mh = Math.floor( this.layer.tiles.height / this.layer.tilesize );
+		
+		var brush = [];
+		for( var ty = r.y; ty < r.y+r.h; ty++ ) {
+			var row = [];
+			for( var tx = r.x; tx < r.x+r.w; tx++ ) {
+				if( tx < 0 || ty < 0 || tx >= mw || ty >= mh) {
+					row.push( 0 );
+				}
+				else {
+					row.push( ty * Math.floor(this.layer.tiles.width / this.layer.tilesize) + tx + 1 );
+				}
+			}
+			brush.push( row );
+		}
+		this.selectionBegin = null;
+		return brush;
+	},
+	
+	
+	getSelectionRect: function( x, y ) {
+		var sx = this.selectionBegin ? this.selectionBegin.x : x,
+			sy = this.selectionBegin ? this.selectionBegin.y : y;
+			
+		var
+			txb = Math.floor( (sx - this.pos.x) / this.layer.tilesize ),
+			tyb = Math.floor( (sy - this.pos.y) / this.layer.tilesize ),
+			txe = Math.floor( (x - this.pos.x) / this.layer.tilesize ),
+			tye = Math.floor( (y - this.pos.y) / this.layer.tilesize );
+		
+		return {
+			x: Math.min( txb, txe ),
+			y: Math.min( tyb, tye ),
+			w: Math.abs( txb - txe) + 1,
+			h: Math.abs( tyb - tye) + 1
+		}
+	},	
+	
+	
+	draw: function() {
+		ig.system.clear( "rgba(0,0,0,0.8)" ); 
+		if( !this.layer.tiles.loaded ) {
+			return;
+		}
+		
+		// Tileset
+		ig.system.context.lineWidth = 1;
+		ig.system.context.strokeStyle = wm.config.colors.secondary;
+		ig.system.context.fillStyle = wm.config.colors.clear;
+		ig.system.context.fillRect( 
+			this.pos.x * ig.system.scale, 
+			this.pos.y * ig.system.scale, 
+			this.layer.tiles.width * ig.system.scale, 
+			this.layer.tiles.height * ig.system.scale
+		);
+		ig.system.context.strokeRect( 
+			this.pos.x * ig.system.scale - 0.5, 
+			this.pos.y * ig.system.scale - 0.5, 
+			this.layer.tiles.width * ig.system.scale + 1, 
+			this.layer.tiles.height * ig.system.scale + 1
+		);
+		
+		this.layer.tiles.draw( this.pos.x, this.pos.y );
+		
+		// Selected Tile
+		var tile = this.getCurrentTile();
+		var tx = Math.floor( tile * this.layer.tilesize ) % this.layer.tiles.width + this.pos.x;
+		var ty = 
+			Math.floor( tile * this.layer.tilesize / this.layer.tiles.width )
+			* this.layer.tilesize + this.pos.y 
+			+ (tile == -1 ? this.layer.tilesize : 0);
+		
+		ig.system.context.lineWidth = 1;
+		ig.system.context.strokeStyle = wm.config.colors.highlight;
+		ig.system.context.strokeRect( 
+			tx * ig.system.scale - 0.5, 
+			ty * ig.system.scale - 0.5, 
+			this.layer.tilesize * ig.system.scale + 1, 
+			this.layer.tilesize * ig.system.scale + 1
+		);
+	},
+	
+	
+	drawCursor: function( x, y ) {  
+		var r = this.getSelectionRect( x, y);
+		
+		ig.system.context.lineWidth = 1;
+		ig.system.context.strokeStyle = wm.config.colors.selection;
+		ig.system.context.strokeRect( 
+			(r.x * this.layer.tilesize + this.pos.x) * ig.system.scale - 0.5, 
+			(r.y * this.layer.tilesize + this.pos.y) * ig.system.scale - 0.5, 
+			r.w * this.layer.tilesize * ig.system.scale + 1, 
+			r.h * this.layer.tilesize * ig.system.scale + 1
+		);
+	}
+});
+
+wm.Undo = ig.Class.extend({
+	levels: null,
+	chain: [],
+	rpos: 0,
+	currentAction: null,
+	
+	init: function( levels ) {
+		this.levels = levels || 10;
+	},
+	
+	
+	clear: function() {
+		this.chain = [];
+		this.currentAction = null;
+	},
+	
+	
+	commit: function( action ) {
+		if( this.rpos ) {
+			this.chain.splice( this.chain.length - this.rpos, this.rpos );
+			this.rpos = 0;
+		}
+		action.activeLayer = ig.game.activeLayer ? ig.game.activeLayer.name : '';
+		this.chain.push( action );
+		if( this.chain.length > this.levels ) {
+			this.chain.shift();
+		}
+	},
+	
+	
+	undo: function() {
+		var action = this.chain[ this.chain.length - this.rpos - 1 ];
+		if( !action ) {
+			return;
+		}
+		this.rpos++;
+		
+		
+		ig.game.setActiveLayer( action.activeLayer );
+		
+		if( action.type == wm.Undo.MAP_DRAW ) {
+			for( var i = 0; i < action.changes.length; i++ ) {
+				var change = action.changes[i];
+				change.layer.setTile( change.x, change.y, change.old );
+			}
+		}
+		else if( action.type == wm.Undo.ENTITY_EDIT ) {
+			action.entity.pos.x = action.old.x;
+			action.entity.pos.y = action.old.y;
+			action.entity.size.x = action.old.w;
+			action.entity.size.y = action.old.h;
+			ig.game.entities.selectEntity( action.entity );
+			ig.game.entities.loadEntitySettings();
+		}
+		else if( action.type == wm.Undo.ENTITY_CREATE ) {
+			ig.game.entities.removeEntity( action.entity );
+			ig.game.entities.selectEntity( null );
+		}
+		else if( action.type == wm.Undo.ENTITY_DELETE ) {
+			ig.game.entities.entities.push( action.entity );
+			if( action.entity.name ) {
+				ig.game.entities.namedEntities[action.entity.name] = action.entity;
+			}
+			ig.game.entities.selectEntity( action.entity );
+		}
+		
+		ig.game.setModified();
+	},
+	
+	
+	redo: function() {
+		if( !this.rpos ) {
+			return;
+		}
+		
+		var action = this.chain[ this.chain.length - this.rpos ];
+		if( !action ) {
+			return;
+		}
+		this.rpos--;
+		
+		
+		ig.game.setActiveLayer( action.activeLayer );
+		
+		if( action.type == wm.Undo.MAP_DRAW ) {
+			for( var i = 0; i < action.changes.length; i++ ) {
+				var change = action.changes[i];
+				change.layer.setTile( change.x, change.y, change.current );
+			}
+		}
+		else if( action.type == wm.Undo.ENTITY_EDIT ) {
+			action.entity.pos.x = action.current.x;
+			action.entity.pos.y = action.current.y;
+			action.entity.size.x = action.current.w;
+			action.entity.size.y = action.current.h;
+			ig.game.entities.selectEntity( action.entity );
+			ig.game.entities.loadEntitySettings();
+		}
+		else if( action.type == wm.Undo.ENTITY_CREATE ) {
+			ig.game.entities.entities.push( action.entity );
+			if( action.entity.name ) {
+				ig.game.entities.namedEntities[action.entity.name] = action.entity;
+			}
+			ig.game.entities.selectEntity( action.entity );
+		}
+		else if( action.type == wm.Undo.ENTITY_DELETE ) {
+			ig.game.entities.removeEntity( action.entity );
+			ig.game.entities.selectEntity( null );
+		}
+		
+		ig.game.setModified();
+	},
+	
+	
+	// -------------------------------------------------------------------------
+	// Map changes
+	
+	beginMapDraw: function() {
+		this.currentAction = {
+			type: wm.Undo.MAP_DRAW,
+			time: Date.now(),
+			changes: []
+		};
+	},
+	
+	pushMapDraw: function( layer, x, y, oldTile, currentTile ) {
+		if( !this.currentAction ) {
+			return;
+		}
+		
+		this.currentAction.changes.push({
+			layer: layer,
+			x: x,
+			y: y,
+			old: oldTile,
+			current: currentTile
+		});
+	},
+	
+	endMapDraw: function() {		
+		if( !this.currentAction || !this.currentAction.changes.length ) {
+			return;
+		}
+		
+		this.commit( this.currentAction );		
+		this.currentAction = null;
+	},
+	
+	
+	// -------------------------------------------------------------------------
+	// Entity changes
+	
+	beginEntityEdit: function( entity ) {		
+		this.currentAction = {
+			type: wm.Undo.ENTITY_EDIT,
+			time: Date.now(),
+			entity: entity,
+			old: {
+				x: entity.pos.x,
+				y: entity.pos.y,
+				w: entity.size.x,
+				h: entity.size.y
+			},
+			current: {
+				x: entity.pos.x,
+				y: entity.pos.y,
+				w: entity.size.x,
+				h: entity.size.y
+			}
+		};
+	},
+
+	pushEntityEdit: function( entity ) {		
+		if( !this.currentAction ) {
+			return;
+		}
+		
+		this.currentAction.current = {
+			x: entity.pos.x,
+			y: entity.pos.y,
+			w: entity.size.x,
+			h: entity.size.y
+		};
+	},
+	
+	
+	endEntityEdit: function() {	
+		var a = this.currentAction;
+		
+		if( !a || (
+			a.old.x == a.current.x && a.old.y == a.current.y &&
+			a.old.w == a.current.w && a.old.h == a.current.h
+		)) {
+			return;
+		}
+		
+		this.commit( this.currentAction );		
+		this.currentAction = null;
+	},
+	
+	
+	commitEntityCreate: function( entity ) {		
+		this.commit({
+			type: wm.Undo.ENTITY_CREATE,
+			time: Date.now(),
+			entity: entity
+		});
+	},
+	
+	
+	commitEntityDelete: function( entity ) {		
+		this.commit({
+			type: wm.Undo.ENTITY_DELETE,
+			time: Date.now(),
+			entity: entity
+		});
+	}
+});
+
+wm.Undo.MAP_DRAW = 1;
+wm.Undo.ENTITY_EDIT = 2;
+wm.Undo.ENTITY_CREATE = 3;
+wm.Undo.ENTITY_DELETE = 4;
+
+
+
+
+ig.Sortable = class Sortable {
+	constructor(container, itemSelector, handleSelector, callback) {
+		this.$container = container;
+		this.callback = callback;
+		this.itemSelector = itemSelector;
+		this.handleSelector = handleSelector;
+
+		this.onMouseMoveBound = this.onMouseMove.bind(this);
+		this.onMouseUpBound = this.onMouseUp.bind(this);
+
+		this.node = null;
+		this.onMouseDownBound = this.onMouseDown.bind(this);		
+		this.$container.find(this.handleSelector).on('mousedown', this.onMouseDownBound);
+	}
+
+	reload() {
+		this.$container.find(this.handleSelector).off('mousedown', this.onMouseDownBound);
+		this.$container.find(this.handleSelector).on('mousedown', this.onMouseDownBound);
+	}
+
+	onMouseDown(ev) {
+		ev.preventDefault();
+		ev.stopPropagation();
+
+		this.modified = false;
+		this.node = ev.currentTarget.closest(this.itemSelector);
+
+		document.addEventListener('mousemove', this.onMouseMoveBound);
+		document.addEventListener('mouseup', this.onMouseUpBound);
+	}
+
+	onMouseMove(ev) {
+		ev.preventDefault();
+		ev.stopPropagation();
+
+		this.node.classList.add('dragging');
+
+		let target = ev.target;
+		while (target && !target.matches(this.itemSelector)) {
+			target = target.parentElement;
+		}
+
+		if (target && target && target !== this.node) {
+			// Swap nodes using a temporary div
+			let temp = document.createElement('div');
+			this.node.parentNode.insertBefore(temp, this.node);
+			target.parentNode.insertBefore(this.node, target);
+
+			temp.parentNode.insertBefore(target, temp);
+			temp.remove();
+
+			this.modified = true;
+		}
+	}
+
+	onMouseUp(ev) {
+		document.removeEventListener('mousemove', this.onMouseMoveBound);
+		document.removeEventListener('mouseup', this.onMouseUpBound);
+		this.node.classList.remove('dragging');
+
+		if (this.modified) {
+			this.callback(this);
+		}
+	}
+};
+
+wm.Weltmeister = ig.Class.extend({	
+	mode: null,
+	MODE: {
+		DRAW: 1,
+		TILESELECT: 2,
+		ENTITYSELECT: 4
+	},
+
+	levelData: {},
+	layers: [],
+	entities: null,
+	activeLayer: null,
+	collisionLayer: null,
+	selectedEntity: null,
+	
+	screen: {x: 0, y: 0},
+	_rscreen: {x: 0, y: 0},
+	mouseLast: {x: -1, y: -1},
+	waitForModeChange: false,
+	
+	tilesetSelectDialog: null,
+	levelSavePathDialog: null,
+	labelsStep: 32,
+	
+	collisionSolid: 1,
+	
+	loadDialog: null,
+	saveDialog: null,
+	loseChangesDialog: null,
+	deleteLayerDialog: null,
+	fileName: 'untitled.json',
+	filePath: wm.config.project.levelPath + 'untitled.json',
+	modified: false,
+	needsDraw: true,
+	
+	undo: null,
+	project: null,
+	projectName: 'unknown project',
+	zoomIndicatorTimeout: null,
+	
+	init: function() {
+		ig.game = ig.editor = this;
+		
+		ig.system.context.textBaseline = 'top';
+		ig.system.context.font = wm.config.labels.font;
+		this.labelsStep = wm.config.labels.step;
+		
+			
+		
+		// Dialogs
+		this.loadDialog = new wm.ModalDialogPathSelect( 'Load Level', 'Load', /\.json$/i );
+		this.loadDialog.onOk = this.load.bind(this);
+		
+		ig.$('#levelLoad').on( 'click', this.showLoadDialog.bind(this) );
+		ig.$('#levelNew').on( 'click', this.showNewDialog.bind(this) );
+		
+		this.saveDialog = new wm.ModalDialogPathSelect( 'Save Level', 'Save', /\.json$/i );
+		this.saveDialog.onOk = this.save.bind(this);
+
+		ig.$('#levelSaveAs').on( 'click', this.saveDialog.open.bind(this.saveDialog) );
+		ig.$('#levelSave').on( 'click', this.saveQuick.bind(this) );
+		ig.$('#openProject').on('click', this.showProjectPicker.bind(this));
+		ig.$('#openInitialProject').on('click', this.showProjectPicker.bind(this));
+		ig.$('#help').on('click', () => ig.$('#helpScreenOverlay').style('display', 'block'));
+		ig.$('#closeHelp').on('click', () => ig.$('#helpScreenOverlay').style('display', 'none'));
+		
+		this.loseChangesDialog = new wm.ModalDialog( 'Lose all changes?' );
+		
+		this.deleteLayerDialog = new wm.ModalDialog( 'Delete Layer? NO UNDO!' );
+		this.deleteLayerDialog.onOk = this.removeLayer.bind(this);
+		
+		this.mode = this.MODE.DEFAULT;
+		
+		
+		this.tilesetSelectDialog = new wm.SelectFileDropdown( '#layerTileset', /\.png|jpe?g$/i);
+		this.entities = new wm.EditEntities( ig.$('#layerEntities') );
+		
+		this.sortable = new ig.Sortable(ig.$('#layers'), '.layer', '.layerMove', () => {
+			this.reorderLayers();
+			this.sortable.reload();
+		});
+		this.resetModified();
+		
+		
+		// Events/Input
+		if( wm.config.touchScroll ) {
+			// Setup wheel event
+			ig.system.canvas.addEventListener('wheel', this.touchScroll.bind(this), false );
+
+			// Unset MWHEEL_* binds
+			delete wm.config.binds['MWHEEL_UP'];
+			delete wm.config.binds['MWHEEL_DOWN'];
+		}
+
+		for( var key in wm.config.binds ) {
+			ig.input.bind( ig.KEY[key], wm.config.binds[key] );
+		}
+		ig.input.keydownCallback = this.keydown.bind(this);
+		ig.input.keyupCallback = this.keyup.bind(this);
+		ig.input.mousemoveCallback = this.mousemove.bind(this);
+		
+		ig.$(window).on('resize', this.resize.bind(this) );
+		ig.$(window).on( 'keydown', this.uikeydown.bind(this) );
+		ig.$(window).on( 'beforeunload', this.confirmClose.bind(this) );
+	
+		ig.$('#buttonAddLayer').on( 'click', this.addLayer.bind(this) );
+		ig.$('#buttonRemoveLayer').on( 'click', this.deleteLayerDialog.open.bind(this.deleteLayerDialog) );
+		ig.$('#buttonSaveLayerSettings').on( 'click', this.saveLayerSettings.bind(this) );
+		ig.$('#reloadImages').on( 'click', ig.Image.reloadCache );
+		ig.$('#layerIsCollision').on( 'change', this.toggleCollisionLayer.bind(this) );
+		
+		ig.$('button#toggleSidebar').on('click', function() {
+			ig.$('button#toggleSidebar').toggleClass('active');
+			if (ig.$('button#toggleSidebar').hasClass('active')) {
+				ig.$('div#menu').show();
+			}
+			else {
+				ig.$('div#menu').hide();
+			}
+		});
+		
+		// Always unfocus current input field when clicking the canvas
+		ig.$('#canvas').on('mousedown', function(){
+			ig.$('input:focus').blur();
+		});
+		
+		
+		this.undo = new wm.Undo( wm.config.undoLevels );
+		
+		// Load directory handle from idb and re- request permissions
+		// if neccessary.
+		ig.store.get('project_dir').then((dirHandle) => {
+			if (!dirHandle) {
+				return;
+			}
+			ig.Filesystem.HasPermissions(dirHandle, (success) => {
+				if (success) {
+					this.openProject(dirHandle);
+					return;
+				}
+				
+				let ask = new wm.ModalDialog( 'Reopen last project?' );
+				ask.onOk = () => {
+					ig.Filesystem.RequestPermissions(dirHandle, (handle) => {
+						this.openProject(handle);
+					});
+				};
+				ask.open();
+			});
+		});
+		
+		ig.setAnimation( this.drawIfNeeded.bind(this) );
+	},
+
+	showProjectPicker: function() {
+		ig.Filesystem.Pick((dirHandle) => {
+			if (dirHandle) {
+				this.openProject(dirHandle);
+			}
+		});
+	},
+
+	openProject: function(dirHandle) {
+		ig.$('#welcomeScreenOverlay').style('display', 'none');
+		ig.store.set('project_dir', dirHandle);
+		this.project = new ig.Filesystem(dirHandle);
+		this.projectName = dirHandle.name;
+		this.setWindowTitle();
+		
+		this.entities.clearEntityTypes();
+		this.project.ls(wm.config.project.entityFiles, /\.c$/, (err, res) => {
+			if (err) {
+				alert('Could not open entity directory: ' + wm.config.project.entityFiles);
+				this.onProjectOpened();
+				return;
+			}
+			if (res.files.length === 0) {
+				alert('No entities found in ' + wm.config.project.entityFiles);
+				this.onProjectOpened();
+				return;
+			}
+
+			let types = [];
+			for (name of res.files) {
+				let typeName = name.match(/\/([^\/]*)\.c$/)[1];
+				types.push({name: typeName, path: name});
+			}
+			(async () => {
+				for (type of types) {
+					let file = await ig.editor.project.loadAsync(type.path);
+					let text = await file.text();
+					this.entities.addEntityType(type.name, text);
+				}
+				this.onProjectOpened();
+			})();
+		})
+	},
+
+	onProjectOpened: function() {
+		this.loadDialog.setPath( wm.config.project.levelPath );
+		this.saveDialog.setPath( wm.config.project.levelPath );
+		this.tilesetSelectDialog.loadDir('');
+
+		if (wm.config.loadLastLevel) {
+			ig.store.get('last_level').then((path) => {
+				if (path) {
+					this.load( null, path );
+				}
+			});
+		}
+	},
+	
+	uikeydown: function( event ) {
+		if( event.target.type == 'text' ) {
+			return;
+		}
+		
+		var key = String.fromCharCode(event.which);
+		if( key.match(/^\d$/) ) {
+			var index = parseInt(key);
+			var name = ig.$('#layers div.layer:nth-child('+index+') span.name').text();
+			
+			var layer = name == 'entities'
+				? this.entities
+				: this.getLayerWithName(name);
+				
+			if( layer ) {
+				if( event.shiftKey ) {
+					layer.toggleVisibility();
+				} else {
+					this.setActiveLayer( layer.name );
+				}
+			}
+		}
+	},
+	
+	
+	showLoadDialog: function() {
+		if( this.modified ) {
+			this.loseChangesDialog.onOk = this.loadDialog.open.bind(this.loadDialog);
+			this.loseChangesDialog.open();
+		} else {
+			this.loadDialog.open();
+		}
+	},
+	
+	showNewDialog: function() {
+		if( this.modified ) {
+			this.loseChangesDialog.onOk = this.loadNew.bind(this);
+			this.loseChangesDialog.open();
+		} else {
+			this.loadNew();
+		}
+	},
+	
+	setModified: function() {
+		if( !this.modified ) {
+			this.modified = true;
+			this.setWindowTitle();
+		}
+	},
+	
+	resetModified: function() {
+		this.modified = false;
+		this.setWindowTitle();
+	},
+	
+	setWindowTitle: function() {
+		document.title = this.fileName + (this.modified ? ' * ' : ' - ') + '(' + this.projectName + ') Weltmeister';
+		ig.$('span.headerTitle').text(this.projectName + ' › ' + this.fileName);
+		ig.$('span.unsavedTitle').text(this.modified ? '*' : '');
+	},
+	
+	
+	confirmClose: function( event ) {
+		if( this.modified && wm.config.askBeforeClose ) {
+			event.returnValue = 'There are some unsaved changes. Leave anyway?';
+			return 'There are some unsaved changes. Leave anyway?';
+		}
+		else {
+			return false;
+		}
+	},
+	
+	
+	resize: function() {
+		ig.system.resize(
+			Math.floor(wm.Weltmeister.getMaxWidth() / wm.config.view.zoom), 
+			Math.floor(wm.Weltmeister.getMaxHeight() / wm.config.view.zoom), 
+			wm.config.view.zoom
+		);
+		ig.system.context.textBaseline = 'top';
+		ig.system.context.font = wm.config.labels.font;
+		this.draw();
+	},
+	
+	scroll: function(x, y) {
+		this.screen.x -= x;
+		this.screen.y -= y;
+
+		this._rscreen.x = Math.round(this.screen.x * ig.system.scale)/ig.system.scale;
+		this._rscreen.y = Math.round(this.screen.y * ig.system.scale)/ig.system.scale;
+		for( var i = 0; i < this.layers.length; i++ ) {
+			this.layers[i].setScreenPos( this.screen.x, this.screen.y );
+		}
+	},
+	
+	drag: function() {
+		var dx = ig.input.mouse.x - this.mouseLast.x,
+			dy = ig.input.mouse.y - this.mouseLast.y;
+		this.scroll(dx, dy);
+	},
+
+	touchScroll: function( event ) {
+		event.preventDefault();
+
+		this.scroll( -event.deltaX/ig.system.scale, -event.deltaY/ig.system.scale );
+		this.draw();
+		return false;
+	},
+
+	zoom: function( delta ) {
+		var z = wm.config.view.zoom;
+		var mx = ig.input.mouse.x * z,
+			my = ig.input.mouse.y * z;
+		
+		if( z <= 1 ) {
+			if( delta < 0 ) {
+				z /= 2;
+			}
+			else {
+				z *= 2;
+			}
+		}
+		else {
+			z += delta;
+		}
+		
+		wm.config.view.zoom = ig.clamp(z, wm.config.view.zoomMin, wm.config.view.zoomMax );
+		wm.config.labels.step = Math.round( this.labelsStep / wm.config.view.zoom );
+		ig.$('#zoomIndicator').text( wm.config.view.zoom + 'x' ).show();
+		clearTimeout(this.zoomIndicatorTimeout);
+		this.zoomIndicatorTimeout = setTimeout(() => {
+			ig.$('#zoomIndicator').hide();
+		},500);
+		
+		// Adjust mouse pos and screen coordinates
+		ig.input.mouse.x = mx / wm.config.view.zoom;
+		ig.input.mouse.y = my / wm.config.view.zoom;
+		this.drag();		
+		this.resize();
+	},
+	
+	
+	// -------------------------------------------------------------------------
+	// Loading
+	
+	loadNew: function() {
+		ig.store.set('last_level', null);
+		while( this.layers.length ) {
+			this.layers[0].destroy();
+			this.layers.splice( 0, 1 );
+		}
+		this.screen = {x: 0, y: 0};
+		this.entities.clear();
+		this.fileName = 'untitled.json';
+		this.filePath = wm.config.project.levelPath + 'untitled.json';
+		this.levelData = {};
+		this.saveDialog.setPath( this.filePath );
+		this.resetModified();
+		this.draw();
+	},
+	
+	
+	load: function( dialog, path ) {
+		this.saveDialog.setPath( path );
+		this.fileName = path.replace(/^.*\//,'');
+		this.filePath = path;
+		if (ig.editor.project) {
+			ig.editor.project.loadText(path, this.loadResponse.bind(this));
+		}
+	},
+	
+	
+	loadResponse: function( error, data ) {
+		if (error) {
+			alert(error);
+			return;
+		}
+
+		try {
+			ig.store.set('last_level', this.filePath);
+			
+			// extract JSON from a module's JS
+			var jsonMatch = data.match( /\/\*JSON\[\*\/([\s\S]*?)\/\*\]JSON\*\// );
+			data = JSON.parse( jsonMatch ? jsonMatch[1] : data );
+			this.levelData = data;
+			
+			while( this.layers.length ) {
+				this.layers[0].destroy();
+				this.layers.splice( 0, 1 );
+			}
+			this.screen = {x: 0, y: 0};
+			this.entities.clear();
+			
+			for( var i=0; i < data.entities.length; i++ ) {
+				var ent = data.entities[i];
+				this.entities.spawnEntity( ent.type, ent.x, ent.y, ent.settings );
+			}
+			
+			for( var i=0; i < data.maps.length; i++ ) {
+				var ld = data.maps[i];
+				var tilesetName = ld.name == 'collision' ?
+					'collision' :
+					ld.tilesetName.replace(/\.qoi$/, '.png');
+
+				var newLayer = new wm.EditMap( ld.name, ld.tilesize, tilesetName, !!ld.foreground );
+				newLayer.resize( ld.width, ld.height );
+				newLayer.linkWithCollision = ld.linkWithCollision;
+				newLayer.repeat = ld.repeat;
+				newLayer.distance = ld.distance;
+				newLayer.visible = !ld.visible;
+				newLayer.data = ld.data;
+				newLayer.toggleVisibility();
+				this.layers.push( newLayer );
+				
+				if( ld.name == 'collision' ) {
+					this.collisionLayer = newLayer;
+				}
+				
+				this.setActiveLayer( ld.name );
+			}
+			
+			this.setActiveLayer( 'entities' );
+		}
+		catch(err) {
+			console.log(err);
+			alert('Error loading: ' + err);
+		}
+		
+		this.reorderLayers();
+		this.sortable.reload();
+		
+		this.resetModified();
+		this.undo.clear();
+		this.draw();
+	},
+	
+	
+	
+	// -------------------------------------------------------------------------
+	// Saving
+	
+	saveQuick: function() {
+		if( this.fileName == 'untitled.json' ) {
+			this.saveDialog.open();
+		}
+		else {
+			this.save( null, this.filePath );
+		}
+	},
+	
+	save: function( dialog, path ) {
+		if( !path.match(/\.json$/) ) {
+			path += '.json';
+		}
+		
+		this.filePath = path;
+		this.fileName = path.replace(/^.*\//,'');
+		var data = this.levelData;
+		data.entities = this.entities.getSaveData();
+		data.maps = [];
+		
+		for( var i=0; i < this.layers.length; i++ ) {
+			var layer = this.layers[i];
+			data.maps.push( layer.getSaveData() );
+		}
+		
+		
+		var dataString = JSON.stringify(data);
+		if( wm.config.project.prettyPrint ) {
+			dataString = ig.jsonPrettyPrint( dataString );
+		}
+
+		if (ig.editor.project) {
+			ig.editor.project.save(path, dataString, this.saveResponse.bind(this));
+		}
+	},
+	
+	saveResponse: function( error ) {
+		if( error ) {
+			alert( error );
+		} else {
+			this.resetModified();
+			ig.store.set('last_level', this.filePath);
+		}
+	},
+	
+	
+	
+	// -------------------------------------------------------------------------
+	// Layers
+	
+	addLayer: function() {
+		var name = 'new_layer_' + this.layers.length;
+		var newLayer = new wm.EditMap( name, wm.config.layerDefaults.tilesize );
+		newLayer.resize( wm.config.layerDefaults.width, wm.config.layerDefaults.height );
+		newLayer.setScreenPos( this.screen.x, this.screen.y );
+		this.layers.push( newLayer );
+		this.setActiveLayer( name );
+		this.updateLayerSettings();
+		
+		this.reorderLayers();
+		this.sortable.reload();
+	},
+	
+	
+	removeLayer: function() {
+		var name = this.activeLayer.name;
+		if( name == 'entities' ) {
+			return false;
+		}
+		this.activeLayer.destroy();
+		for( var i = 0; i < this.layers.length; i++ ) {
+			if( this.layers[i].name == name ) {
+				this.layers.splice( i, 1 );
+				this.reorderLayers();
+				this.sortable.reload();
+				this.setActiveLayer( 'entities' );
+				return true;
+			}
+		}
+		return false;
+	},
+	
+	
+	getLayerWithName: function( name ) {
+		for( var i = 0; i < this.layers.length; i++ ) {
+			if( this.layers[i].name == name ) {
+				return this.layers[i];
+			}
+		}
+		return null;
+	},
+	
+	
+	reorderLayers: function() {
+		var newLayers = [];
+		var isForegroundLayer = true;
+		var layerNameElements = ig.$('#layers div.layer span.name').elements;
+		for (var i = 0; i < layerNameElements.length; i++) {
+			var name = layerNameElements[i].textContent;
+			var layer = name == 'entities'
+				? this.entities
+				: this.getLayerWithName(name);
+				
+			if( layer ) {
+				layer.setHotkey( i+1 );
+				if( layer.name == 'entities' ) {
+					// All layers after the entity layer are not foreground
+					// layers
+					isForegroundLayer = false;
+				}
+				else {
+					layer.foreground = isForegroundLayer;
+					newLayers.unshift( layer );
+				}
+			}
+		}
+		this.layers = newLayers;
+		this.setModified();
+		this.draw();
+	},
+	
+	
+	updateLayerSettings: function( ) {
+		ig.$('#layerName').val( this.activeLayer.name );
+		ig.$('#layerTileset').val( this.activeLayer.tilesetName );
+		ig.$('#layerTilesize').val( this.activeLayer.tilesize );
+		ig.$('#layerWidth').val( this.activeLayer.width );
+		ig.$('#layerHeight').val( this.activeLayer.height );
+		ig.$('#layerRepeat').checked(this.activeLayer.repeat );
+		ig.$('#layerLinkWithCollision').checked(this.activeLayer.linkWithCollision );
+		ig.$('#layerDistance').val( this.activeLayer.distance );
+		ig.$('#layerIsCollision').checked( this.activeLayer.isCollision);
+	},
+	
+	
+	saveLayerSettings: function() {
+		var isCollision = ig.$('#layerIsCollision').checked();
+		
+		var newName = ig.$('#layerName').val();
+		var newWidth = Math.floor(ig.$('#layerWidth').val());
+		var newHeight = Math.floor(ig.$('#layerHeight').val());
+		
+		if( newWidth != this.activeLayer.width || newHeight != this.activeLayer.height ) {
+			this.activeLayer.resize( newWidth, newHeight );
+		}
+		this.activeLayer.tilesize = Math.floor(ig.$('#layerTilesize').val());
+		
+		if( isCollision ) {
+			newName = 'collision';
+			this.activeLayer.isCollision = true;
+			this.activeLayer.collisionTileSize = null;
+			this.activeLayer.linkWithCollision = false;
+			this.activeLayer.distance = 1;
+			this.activeLayer.repeat = false;
+			this.activeLayer.tilesetName = 'collision';
+		}
+		else {
+			var newTilesetName = ig.$('#layerTileset').val();
+			if( newTilesetName != this.activeLayer.tilesetName ) {
+				this.activeLayer.setTileset( newTilesetName );
+			}
+			this.activeLayer.isCollision = false;
+			this.activeLayer.linkWithCollision = ig.$('#layerLinkWithCollision').checked();
+			this.activeLayer.distance = parseFloat(ig.$('#layerDistance').val());
+			this.activeLayer.repeat = ig.$('#layerRepeat').checked();
+		}
+		
+		
+		if( newName == 'collision' ) {
+			// is collision layer
+			this.collisionLayer = this.activeLayer;
+		} 
+		else if( this.activeLayer.name == 'collision' ) {
+			// was collision layer, but is no more
+			this.collisionLayer = null;
+		}
+		
+
+		this.activeLayer.setName( newName );
+		this.setModified();
+		this.draw();
+	},
+	
+	
+	setActiveLayer: function( name ) {
+		var previousLayer = this.activeLayer;
+		this.activeLayer = ( name == 'entities' ? this.entities : this.getLayerWithName(name) );
+		if( previousLayer == this.activeLayer ) {
+			return; // nothing to do here
+		}
+		
+		if( previousLayer ) {
+			previousLayer.setActive( false );
+		}
+		this.activeLayer.setActive( true );
+		this.mode = this.MODE.DEFAULT;
+		
+		ig.$('#layerIsCollision').checked((name == 'collision'));
+		
+		if( name == 'entities' ) {
+			ig.$('#layerSettings').hide();
+		}
+		else {
+			this.entities.selectEntity( null );
+			this.updateLayerSettings();
+			this.toggleCollisionLayer();
+			ig.$('#layerSettings').show();
+		}
+		this.draw();
+	},
+	
+	
+	toggleCollisionLayer: function( ev ) {
+		var isCollision = ig.$('#layerIsCollision').checked();
+		ig.$('#layerLinkWithCollision,#layerDistance,#layerRepeat,#layerName,#layerTileset')
+			.prop('disabled', isCollision );
+	},
+	
+	
+	
+	// -------------------------------------------------------------------------
+	// Update
+	
+	mousemove: function() {
+		if( !this.activeLayer ) {
+			return;
+		}
+		
+		if( this.mode == this.MODE.DEFAULT ) {
+			
+			// scroll map
+			if( ig.input.state('drag') ) {
+				this.drag();
+			}
+			
+			else if( ig.input.state('draw') ) {
+				
+				// move/scale entity
+				if( this.activeLayer == this.entities ) {
+					var x = ig.input.mouse.x + this.screen.x;
+					var y = ig.input.mouse.y + this.screen.y;
+					this.entities.dragOnSelectedEntity( x, y );
+					this.setModified();
+				}
+				
+				// draw on map
+				else if( !this.activeLayer.isSelecting ) {
+					this.setTileOnCurrentLayer();
+				}
+			}
+			else if( this.activeLayer == this.entities ) {
+				var x = ig.input.mouse.x + this.screen.x;
+				var y = ig.input.mouse.y + this.screen.y;
+				this.entities.mousemove( x, y );
+			}
+		}
+		
+		this.mouseLast = {x: ig.input.mouse.x, y: ig.input.mouse.y};
+		this.draw();
+	},
+	
+	
+	keydown: function( action ) {
+		if( !this.activeLayer ) {
+			return;
+		}
+		
+		if( action == 'draw' ) {
+			if( this.mode == this.MODE.DEFAULT ) {
+				// select entity
+				if( this.activeLayer == this.entities ) {
+					var x = ig.input.mouse.x + this.screen.x;
+					var y = ig.input.mouse.y + this.screen.y;
+					var entity = this.entities.selectEntityAt( x, y );
+					if( entity ) {
+						this.undo.beginEntityEdit( entity );
+					}
+				}
+				else {
+					if( ig.input.state('select') ) {
+						this.activeLayer.beginSelecting( ig.input.mouse.x, ig.input.mouse.y );
+					}
+					else {
+						this.undo.beginMapDraw();
+						this.activeLayer.beginEditing();
+						if( 
+							this.activeLayer.linkWithCollision && 
+							this.collisionLayer && 
+							this.collisionLayer != this.activeLayer
+						) {
+							this.collisionLayer.beginEditing();
+						}
+						this.setTileOnCurrentLayer();
+					}
+				}
+			}
+			else if( this.mode == this.MODE.TILESELECT && ig.input.state('select') ) {	
+				this.activeLayer.tileSelect.beginSelecting( ig.input.mouse.x, ig.input.mouse.y );
+			}
+		}
+		
+		this.draw();
+	},
+	
+	
+	keyup: function( action ) {
+		if( !this.activeLayer ) {
+			return;
+		}
+		
+		if( action == 'delete' ) {
+			this.entities.deleteSelectedEntity();
+			this.setModified();
+		}
+		
+		else if( action == 'clone' ) {
+			this.entities.cloneSelectedEntity();
+			this.setModified();
+		}
+		
+		else if( action == 'grid' ) {
+			wm.config.view.grid = !wm.config.view.grid;
+		}
+		
+		else if( action == 'menu' ) {
+			if( this.mode != this.MODE.TILESELECT && this.mode != this.MODE.ENTITYSELECT ) {
+				if( this.activeLayer == this.entities ) {
+					this.mode = this.MODE.ENTITYSELECT;
+					this.entities.showMenu( ig.input.mouse.x, ig.input.mouse.y );
+				}
+				else {
+					this.mode = this.MODE.TILESELECT;
+					this.activeLayer.tileSelect.setPosition( ig.input.mouse.x, ig.input.mouse.y	);
+				}
+			} else {
+				this.mode = this.MODE.DEFAULT;
+				this.entities.hideMenu();
+			}
+		}
+		
+		else if( action == 'zoomin' ) {
+			this.zoom( 1 );
+		}
+		else if( action == 'zoomout' ) {
+			this.zoom( -1 );
+		}
+		
+		
+		if( action == 'draw' ) {			
+			// select tile
+			if( this.mode == this.MODE.TILESELECT ) {
+				this.activeLayer.brush = this.activeLayer.tileSelect.endSelecting( ig.input.mouse.x, ig.input.mouse.y );
+				this.mode = this.MODE.DEFAULT;
+			}
+			else if( this.activeLayer == this.entities ) {
+				this.undo.endEntityEdit();
+			}
+			else {
+				if( this.activeLayer.isSelecting ) {
+					this.activeLayer.brush = this.activeLayer.endSelecting( ig.input.mouse.x, ig.input.mouse.y );
+				}
+				else {
+					this.undo.endMapDraw();
+				}
+			}
+		}
+		
+		if( action == 'undo' ) {
+			this.undo.undo();
+		}
+		
+		if( action == 'redo' ) {
+			this.undo.redo();
+		}
+
+		if ( action == 'save' ) {
+			this.saveQuick();
+		}
+		
+		this.draw();
+		this.mouseLast = {x: ig.input.mouse.x, y: ig.input.mouse.y};
+	},
+	
+	
+	setTileOnCurrentLayer: function() {
+		if( !this.activeLayer || !this.activeLayer.scroll ) {
+			return;
+		}
+		
+		var co = this.activeLayer.getCursorOffset();
+		var x = ig.input.mouse.x + this.activeLayer.scroll.x - co.x;
+		var y = ig.input.mouse.y + this.activeLayer.scroll.y - co.y;
+		
+		var brush = this.activeLayer.brush;
+		for( var by = 0; by < brush.length; by++ ) {
+			var brushRow = brush[by];
+			for( var bx = 0; bx < brushRow.length; bx++ ) {
+				
+				var mapx = x + bx * this.activeLayer.tilesize;
+				var mapy = y + by * this.activeLayer.tilesize;
+				
+				var newTile = brushRow[bx];
+				var oldTile = this.activeLayer.getOldTile( mapx, mapy );
+				
+				this.activeLayer.setTile( mapx, mapy, newTile );
+				this.undo.pushMapDraw( this.activeLayer, mapx, mapy, oldTile, newTile );
+				
+				
+				if( 
+					this.activeLayer.linkWithCollision && 
+					this.collisionLayer && 
+					this.collisionLayer != this.activeLayer
+				) {
+					var collisionLayerTile = newTile > 0 ? this.collisionSolid : 0;
+					
+					var oldCollisionTile = this.collisionLayer.getOldTile(mapx, mapy);
+					this.collisionLayer.setTile( mapx, mapy, collisionLayerTile );
+					this.undo.pushMapDraw( this.collisionLayer, mapx, mapy, oldCollisionTile, collisionLayerTile );
+				}
+			}
+		}
+		
+		this.setModified();
+	},
+	
+	
+	// -------------------------------------------------------------------------
+	// Drawing
+	
+	draw: function() {
+		// The actual drawing loop is scheduled via ig.setAnimation() already.
+		// We just set a flag to indicate that a redraw is needed.
+		this.needsDraw = true;
+	},
+	
+	
+	drawIfNeeded: function() {
+		// Only draw if flag is set
+		if( !this.needsDraw ) { return; }
+		this.needsDraw = false;
+		
+		
+		ig.system.clear( wm.config.colors.clear );
+	
+		var entitiesDrawn = false;
+		for( var i = 0; i < this.layers.length; i++ ) {
+			var layer = this.layers[i];
+			
+			// This layer is a foreground layer? -> Draw entities first!
+			if( !entitiesDrawn && layer.foreground ) {
+				entitiesDrawn = true;
+				this.entities.draw();
+			}
+			layer.draw();
+		}
+		
+		if( !entitiesDrawn ) {
+			this.entities.draw();
+		}
+		
+		
+		if( this.activeLayer ) {
+			if( this.mode == this.MODE.TILESELECT ) {
+				this.activeLayer.tileSelect.draw();
+				this.activeLayer.tileSelect.drawCursor( ig.input.mouse.x, ig.input.mouse.y );
+			}
+			
+			if( this.mode == this.MODE.DEFAULT ) {
+				this.activeLayer.drawCursor( ig.input.mouse.x, ig.input.mouse.y );
+			}
+		}
+		
+		if( wm.config.labels.draw ) {
+			this.drawLabels( wm.config.labels.step );
+		}
+	},
+	
+	
+	drawLabels: function( step ) {
+		ig.system.context.fillStyle = wm.config.colors.primary;
+		var xlabel = this.screen.x - this.screen.x % step - step;
+		for( var tx = Math.floor(-this.screen.x % step); tx < ig.system.width; tx += step ) {
+			xlabel += step;
+			ig.system.context.fillText( xlabel, tx * ig.system.scale, 0 );
+		}
+		
+		var ylabel = this.screen.y - this.screen.y % step - step;
+		for( var ty = Math.floor(-this.screen.y % step); ty < ig.system.height; ty += step ) {
+			ylabel += step;
+			ig.system.context.fillText( ylabel, 0, ty * ig.system.scale );
+		}
+	},
+	
+	
+	getEntityByName: function( name ) {
+		return this.entities.getEntityByName( name );
+	}
+});
+
+
+wm.Weltmeister.getMaxWidth = function() {
+	return window.innerWidth;
+};
+
+wm.Weltmeister.getMaxHeight = function() {
+	return window.innerHeight - ig.$('#headerMenu').height();
+};
+
+
+// -----------------------------------------------------------------------------
+// KV-Store wrapper over IndexedDB
+// Based on https://github.com/jakearchibald/idb-keyval
+
+ig.Storage = (function(storeName = 'keyval-store'){
+	function promisifyRequest(request) {
+		return new Promise((resolve, reject) => {
+			request.oncomplete = request.onsuccess = () => resolve(request.result);
+			request.onabort = request.onerror = () => reject(request.error);
+		});
+	}
+	function createStore(dbName, name) {
+		const request = indexedDB.open(dbName);
+		request.onupgradeneeded = () => request.result.createObjectStore(name);
+		const dbp = promisifyRequest(request);
+		return (txMode, callback) => dbp.then((db) => callback(db.transaction(name, txMode).objectStore(name)));
+	}
+	let defaultGetStoreFunc;
+	function defaultGetStore() {
+		if (!defaultGetStoreFunc) {
+			defaultGetStoreFunc = createStore(storeName, 'keyval');
+		}
+		return defaultGetStoreFunc;
+	}
+	function get(key, customStore = defaultGetStore()) {
+		return customStore('readonly', (store) => promisifyRequest(store.get(key)));
+	}
+	function set(key, value, customStore = defaultGetStore()) {
+		return customStore('readwrite', (store) => {
+			store.put(value, key);
+			return promisifyRequest(store.transaction);
+		});
+	}
+	function del(key, customStore = defaultGetStore()) {
+		return customStore('readwrite', (store) => {
+			store.delete(key);
+			return promisifyRequest(store.transaction);
+		});
+	}
+	function clear(customStore = defaultGetStore()) {
+		return customStore('readwrite', (store) => {
+			store.clear();
+			return promisifyRequest(store.transaction);
+		});
+	}
+
+	return {clear, createStore, del, get, set};
+});
+
+
+// -----------------------------------------------------------------------------
+// Simple filesystem abstraction for forme PHP API
+
+ig.Filesystem = class {
+	constructor(handle) {
+		this.root = handle;
+	}
+
+	async dirHandle(dir) {
+		try {
+			let h = this.root;
+			if (dir && dir != '') {
+				dir = dir.replace(/\/+$/, '');
+				let path = dir.split('/');
+				for (const p of path) {
+					h = await h.getDirectoryHandle(p);
+					if (!h) {
+						console.warn('failed to browse', path, 'part', p);
+						return null;
+					}
+				}
+			}
+			return h;
+		} catch (err) { 
+			console.warn(err);
+			return null;
+		}
+	}
+
+	async fileHandle(path, create = false) {
+		let parts = path.split('/');
+		let dh = await this.dirHandle(parts.slice(0, -1).join('/'));
+		if (!dh) {
+			return null;
+		}
+		try {
+			let fh = await dh.getFileHandle(parts[parts.length-1], {create});
+			return fh;
+		} catch (err) { return null; }
+	}
+
+	async loadAsync(path) {
+		try {
+			let fh = await this.fileHandle(path);
+			if (!fh) {
+				return null;
+			}
+			return await fh.getFile();
+		}
+		catch(err) {
+			return null;
+		}
+	}
+
+	loadText(path, callback) {
+		(async () => {
+			try {
+				let file = await this.loadAsync(path)
+				if (!file) {
+					callback('Could not open file: '+path);
+					return;
+				}
+				let text = await file.text();
+				callback(null, text);
+			} catch (err) {
+				console.warn(err);
+				callback('Could not read file: '+path);
+			}
+		})();
+	}
+
+	load(path, callback) {
+		(async () => {
+			try {
+				let file = await this.loadAsync(path)
+				if (!file) {
+					callback('Could not open file: '+path);
+					return;
+				}
+				callback(null, file);
+			} catch (err) {
+				console.warn(err);
+				callback('Could not read file: '+path);
+			}
+		})();
+	}
+
+	save(path, dataString, callback) {
+		(async () => {
+			let fh = await this.fileHandle(path, true);
+			if (!fh) {
+				callback('Could not open file: '+path);
+				return;
+			}
+			try {
+				let writable = await fh.createWritable();
+				await writable.write(dataString);
+				await writable.close();
+				callback(null);
+			} catch(err) {
+				callback('Could not write to: '+path);
+			}
+		})();
+	}
+
+	ls(dir, filter, callback) {
+		(async () => {
+			let handle = await this.dirHandle(dir);
+			if (!handle) { 
+				callback('Could not open directory: ' + dir);
+			}
+
+			let res = {
+				parent: dir ? dir.split('/').slice(0, -1).join('/') : false,
+				dirs: [],
+				files: []
+			};
+
+			let base = dir ? dir + '/' : '';
+			for await (const [name, fh] of handle.entries()) {
+				if (fh.kind === 'directory') {
+					res.dirs.push(base + name);
+				}
+				else if (fh.kind === 'file' && (!filter || name.match(filter))) {
+					res.files.push(base + name);
+				}
+			}
+			res.dirs.sort();
+			res.files.sort();
+			callback(null, res);
+		})();
+	}
+
+	static HasPermissions(handle, callback) {
+		(async () => {
+			if ((await handle.queryPermission({mode: 'readwrite'})) === "granted") {
+				callback(true);
+			}
+			else {
+				callback(false);
+			}
+		})();
+	}
+
+	static RequestPermissions(handle, callback) {
+		(async () => {
+			let p = {mode: 'readwrite'};
+			if ((await handle.requestPermission({mode: 'readwrite'})) === "granted") {
+				callback(handle);
+			}
+		})();
+	}
+
+
+	static Pick(callback) {
+		if (!window.showDirectoryPicker) {
+			alert('This browser does not support window.showDirectoryPicker(). Try Chrome :(');
+			return;
+		}
+		window.showDirectoryPicker({ id: "project", mode: "readwrite" })
+			.then((handle) => callback(handle));
+	}
+};
+
+ig.system = new ig.System(
+	'#canvas', 1,
+	Math.floor(wm.Weltmeister.getMaxWidth() / wm.config.view.zoom),
+	Math.floor(wm.Weltmeister.getMaxHeight() / wm.config.view.zoom),
+	wm.config.view.zoom
+);
+
+ig.store = ig.Storage('weltmeister');
+ig.input = new wm.EventedInput();
+ig.ready = true;
+ig.game = new wm.Weltmeister();
+
+
+</script>
+</body>
+</html>

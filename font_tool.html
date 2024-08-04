@@ -1,0 +1,717 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<title>high_impact font_tool</title>
+	<link rel="stylesheet" type="text/css" href="ui.css"/>
+	<style>
+		* {
+			box-sizing: border-box;
+		}
+
+		body {
+			color: #333;
+			background-color: #fff;
+			font-family: sans-serif;
+			padding: 32px;
+			font-size: 10pt;
+			max-width: 1092px;
+			margin: 32px auto 256px auto;
+			line-height: 1.4;
+		}
+
+		input, select {
+			margin-right: 16px;
+			background-color: #eee;
+			color: #333;
+			border: 0;
+			padding: 4px 6px;
+			
+			font-size: 10pt;
+		}
+
+		pre, code {
+			padding: 4px 2px 4px 2px;
+		}
+
+		div.section {
+			display: none;
+		}
+
+		p#preview {
+			font-size: 28px;
+		}
+
+		textarea {
+			width: 100%;
+			height: 128px;
+		}
+
+		a { 
+			color: #fa0;
+		}
+
+		h1, h2, h3 {
+			font-weight: normal;
+			text-transform: uppercase;
+		}
+
+		h1 {
+			text-transform: none;
+			font-size: 34px;
+			margin: 32px 0;
+		}
+
+		h2 {
+			margin-top: 64px;
+		}
+
+		h3 {
+			margin-top: 32px;
+		}
+
+		#form {
+			padding-bottom: 2em;
+			line-height: 2;
+		}
+		textarea.example {
+			display: none;
+		}
+
+		.box {
+			width: 512px;
+			float: left;
+		}
+
+		.box:first-child { 
+			margin-right: 4px;
+		}
+
+		canvas {
+			background-color: #333;
+			-webkit-font-smoothing: antialiased;
+		}
+
+		#glyph-canvas {
+			max-width: 512px;
+			max-height: 512px;
+		}
+
+		input[type=button] {
+			background-color: #fa0;
+			color: #fff;
+			cursor: pointer;
+			text-transform: uppercase;
+			font-size: 12px;
+			padding: 8px 64px;
+		}
+
+		input#size {
+			width: 38px;
+		}
+
+		input[disabled] {
+			background-color: #555;
+			color: #aaa;
+		}
+</style>
+	<style id="font-face-style" type="text/css"></style>
+</head>
+<body>
+
+<h1>font_tool</h1>
+
+<div class="section" id="section-font-face-declaration">
+	<h2>CSS @font-face Declaration</h2>
+	<p><em>
+		You can load any CSS for a Web-Font here (<a href="https://www.google.com/fonts">Google Fonts</a>
+		is a good source), or just specify a locally installed font with the <code>src: local("name");</code>
+		rule.
+	</em></p>
+	<p>Generate @font-face from a local ttf/woff file: <input type="file" id="font-local-file"/></p>
+	<div><textarea spellcheck="false" id="font-face-css"></textarea></div>
+
+	<p>
+		<input type="button" value="Load @font-face" id="load-css"/>
+	</p>
+</div>
+
+
+<div class="section" id="section-selected-font-preview">
+	<h2><span id="font-name"></span> Preview</h2>
+	<p id="preview" contentEditable="true">
+		The five boxing wizards jump quickly. 0123456789!?
+	</p>
+</div>
+
+
+<div class="section" id="section-generator-settings">
+	<h2>Generator Settings</h2>
+	<p>
+		Font Style: <select id="font-style">
+			<option value="">Normal</option>
+			<option value="bold">Bold</option>
+			<option value="italic">Italic</option>
+			<option value="italic bold">Bold Italic</option>
+		</select>
+
+		<span class="render-type-setting render-type-setting-Bitmap render-type-setting-Pixel">
+			Size: <input type="number" id="font-size" value="14"/>
+		</span>
+
+		Range: <select id="character-range">
+			<option value="127" selected>ASCII only</option>
+			<option value="255">Full Latin-1</option>
+		</select>
+
+		Spacing: <select id="font-spacing">
+			<option value="proportional" selected>Proportional</option>
+			<option value="monospace-numbers">Force monospaced numbers</option>
+			<option value="monospace-all">Force monospaced all</option>
+		</select>
+	</p>
+
+	<p>
+		Rendering:
+		<select id="render-type">
+			<option value="Bitmap">Antialiased</option>
+			<option value="Pixel">Pixelated</option>
+		</select>
+
+		Output width:
+		<select id="output-width">
+			<option value="64">64</option>
+			<option value="128">128</option>
+			<option value="256" selected>256</option>
+			<option value="512">512</option>
+			<option value="1024">1024</option>
+		</select>
+	</p>
+
+	<p style="clear:both;"><em class="render-type-setting render-type-setting-Pixel">
+		Note: Antialiasing can not be disabled in all browsers. Typically Firefox/Windows does a good job with
+		Pixel fonts, regardless of Antialias, if rendered in the correct size. Chrome/OSX lets us specifically disable
+		Antialiasing and is thus the preferred choice.
+	</em></p>
+
+	<p>
+		Glyph draw function:
+		<select id="glyph-draw-preset">
+			<option value="glyph-draw-default">Default</option>
+			<option value="glyph-draw-gradient">Gradient</option>
+			<option value="glyph-draw-outline">Outline</option>
+		</select>
+	</p>
+	<p>
+		<textarea spellcheck="false" id="glyph-draw-function">ctx.fillText(glyph, x, y);</textarea>
+
+		<textarea id="glyph-draw-default" class="example">ctx.fillText(glyph, x, y);</textarea>
+
+		<textarea id="glyph-draw-gradient" class="example">let height = ctx.canvas.height;
+let gradient = ctx.createLinearGradient(0, height*0.25, 0, height*0.75);
+gradient.addColorStop("0","#FF92CE");
+gradient.addColorStop("1.0","#6736FF");
+ctx.fillStyle = gradient;
+ctx.fillText(glyph, x, y);</textarea>
+
+		<textarea id="glyph-draw-outline" class="example">ctx.strokeStyle = 'red';
+ctx.lineWidth = 2;
+ctx.strokeText(glyph, x, y);
+ctx.fillStyle = 'white';
+ctx.fillText(glyph, x, y);
+</textarea>
+	</p>
+
+	<p>
+		<input type="button" value="Generate" id="generate"/>
+	</p>
+</div>
+
+
+<div class="section" id="section-intermediate-output">
+	<div class="box">
+		<h2>Current Glyph</h2>
+		<canvas id="glyph-canvas" width="512" height="512"></canvas>
+	</div>
+
+	<div class="box">
+		<h2>Result</h2>
+		<canvas id="output-canvas" width="512" height="512"></canvas>
+	</div>
+	<div style="clear:both"></div>
+</div>
+
+<div class="section" id="section-generated-font">
+	<h2>Generated Font</h2>
+
+	<div class="box">
+		<h3>Glyph image as PNG, metrics as JSON</h3>
+		<p>
+			<a id="font-download-image" href="#">
+				font_<span class="font-file-name">arial</span>.png
+			</a>
+			– glyph image
+			(Save as <code>assets/font_<span class="font-file-name">arial</span>.png</code>)
+		</p>
+		<p>
+			<a id="font-download-definition" href="#">
+				font_<span class="font-file-name">arial</span>.json
+			</a>
+			– font definition 
+			(Save as <code>assets/font_<span class="font-file-name">arial</span>.json</code>)
+		</p>
+	</div>
+	<div class="box">
+		<h3>Usage</h3>
+		<p id="font-info">
+			<pre><code>font_t *font = font(
+    "assets/font_<span class="font-file-name">arial</span>.qoi",
+    "assets/font_<span class="font-file-name">arial</span>.json"
+);</code></pre>
+		</p>
+	</div>
+
+	<div style="clear:both"></div>
+</div>
+
+<script type="text/javascript">
+"use strict";
+
+
+// -----------------------------------------------------------------------------
+// Bitmap Fonts
+
+var FontBitmap = function(outputCanvas, glyphCanvas, fontName, fontStyle, fontSize, spacing, drawFunction) {
+	this.outputCanvas = outputCanvas;
+	this.outputCtx = this.outputCanvas.getContext('2d');
+
+	this.glyphCanvas = glyphCanvas;
+	this.glyphCtx = this.glyphCanvas.getContext('2d');
+
+	this.outputCanvas.style.imageRendering = 'auto';
+	this.outputCanvas.style.webkitFontSmoothing = 'antialiased ';
+	this.glyphCanvas.style.imageRendering = 'auto ';
+	this.glyphCanvas.style.webkitFontSmoothing = 'antialiased ';
+
+	this.firstChar = 32;
+	this.fontSize = fontSize;
+
+	this.outputSize = this.fontSize * 3;
+	this.spacing = spacing;
+	this.advances = [];
+	this.drawFunction = drawFunction || FontBitmap.DrawGlyph;
+
+
+	var ident = (fontName+(fontStyle ? ('-' + fontStyle) : '')).replace(/\s/g,'-').replace(/^(\d)/,"_$1");
+	this.fileName = ident.toLowerCase();
+	this.className = ident.replace(/(^|-)(\w)/g, function(m, s, a) { return a.toUpperCase(); });
+	
+	this.glyphCanvas.width = this.outputSize;
+	this.glyphCanvas.height = this.outputSize;
+	this.glyphCtx.font = (fontStyle ? fontStyle + ' ' : '') + (this.fontSize)+ 'px '+ '"' + fontName + '", sans-serif';
+	this.glyphCtx.textBaseline = 'middle';
+
+	this.currentChar = 0;
+	this.currentX = 0;
+	this.currentY = 0;
+	this.currentMaxHeight = 0;
+
+	this.isGenerating = false;
+	this.nextGlyphTimeout = 0;
+
+	this.metrics = [];
+	this.memoryUsageEstimate = 0;
+};
+
+FontBitmap.prototype.generate = function(firstChar, lastChar, callback) {
+	this.cancel();
+
+	for (var i = firstChar; i < lastChar; i++) {
+		var str = String.fromCharCode(i);
+		var advance = Math.round(this.glyphCtx.measureText(str).width);
+		this.advances.push(advance);
+	}
+
+	if (this.spacing === 'monospace-numbers') {
+		let charOffset = '0'.charCodeAt(0) - firstChar;
+		let maxAdvance = 0;
+		for (var i = 0; i < 10; i++) {
+			maxAdvance = Math.max(maxAdvance, this.advances[charOffset+i]);
+		}
+		for (var i = 0; i < 10; i++) {
+			this.advances[charOffset+i] = maxAdvance;
+		}
+	}
+	else if (this.spacing === 'monospace-all') {
+		let maxAdvance = 0;
+		for (var i = 0; i < this.advances.length; i++) {
+			maxAdvance = Math.max(maxAdvance, this.advances[i]);
+		}
+		for (var i = 0; i < this.advances.length; i++) {
+			this.advances[i] = maxAdvance;
+		}
+	}
+
+	this.isGenerating = true;
+	this.finishedCallback = callback;
+
+	this.firstChar = firstChar;
+	this.lastChar = lastChar;
+
+	this.currentChar = this.firstChar;
+	this.currentX = 0;
+	this.currentY = 0;
+	this.currentMaxHeight = 0;
+	this.nextGlyphTimeout = 0;
+
+	var totalChars = this.lastChar - this.firstChar;
+	var maxHeightNeeded = Math.ceil((this.outputSize * this.outputSize * totalChars) / this.outputCanvas.width);
+	this.outputCanvas.height = maxHeightNeeded;
+	this.clear();
+
+	this.metrics = [];
+	this.memoryUsageEstimate = 0;
+
+	this._drawGlyphs();
+};
+
+FontBitmap.prototype.clear = function() {
+	this.outputCtx.clearRect(0, 0, this.outputCanvas.width, this.outputCanvas.height);
+};
+
+FontBitmap.prototype.cancel = function() {
+	if (this.isGenerating) {
+		this.isGenerating = false;
+		clearTimeout(this.nextGlyphTimeout);
+		if (this.finishedCallback) {
+			this.finishedCallback(this);
+		}
+	}
+};
+
+FontBitmap.prototype._drawGlyphs = function() {
+	var glyph = this._getGlyph(this.currentChar);
+
+	// Start a new row?
+	if (glyph.size.x > this.outputCanvas.width - this.currentX) {
+		this.currentX = 0;
+		this.currentY += this.currentMaxHeight + 2;
+		this.currentMaxHeight = 0;
+	}
+
+	// Calculate the offset from the lexicographical starting point of this glyph 
+	// to the first pixel actually drawn. Usually drawing starts further left than 
+	// the lexicographical start, thus the offset is negative.
+	var offsetX = (glyph.offset.x + glyph.advance * 0.5 - this.outputSize * 0.5)|0;
+	var offsetY = (glyph.offset.y + this.fontSize * 0.5 - this.outputSize * 0.5)|0;
+	this.metrics.push(this.currentX, this.currentY, glyph.size.x, glyph.size.y, offsetX, offsetY, glyph.advance);
+
+	// Draw the glyph on output canvas
+	this.outputCtx.putImageData(
+		glyph.data, 
+		this.currentX - glyph.offset.x, this.currentY - glyph.offset.y,
+		glyph.offset.x, glyph.offset.y,
+		glyph.size.x, glyph.size.y
+	);
+
+	this.currentX += glyph.size.x+1;
+	this.currentMaxHeight = Math.max(glyph.size.y, this.currentMaxHeight);
+
+
+	// Schedule next glyph
+	this.currentChar++;
+	if (this.currentChar < this.lastChar) {
+		// Allow for GC pauses every so often; Chrome would otherwise reach
+		// its 4GB memory limit and crash the tab.
+		var wait = 1;
+		if (this.memoryUsageEstimate > 512*1024*1024) {
+			this.memoryUsageEstimate = 0;
+			wait = 1000;
+		}
+		this.nextGlyphTimeout = setTimeout(this._drawGlyphs.bind(this), wait);
+	}
+	else {
+		this.isGenerating = false;
+		this._finished();
+	}
+};
+
+FontBitmap.prototype._getGlyph = function(idx) {
+	var glyphSize = this.outputSize;
+	var advance = this.advances[idx - this.firstChar];
+	var str = String.fromCharCode(idx);
+
+	// draw fullsize to the glyph canvas
+	var x = (glyphSize * 0.5 - advance * 0.5)|0,
+		y = (glyphSize * 0.5)|0;
+
+	this.glyphCtx.clearRect(0, 0, glyphSize, glyphSize);
+	this.glyphCtx.fillStyle = '#fff';
+	this.drawFunction(this.glyphCtx, str, x, y);
+
+	this.memoryUsageEstimate += glyphSize * glyphSize * 4;
+	var glyphData = this.glyphCtx.getImageData(0, 0, glyphSize, glyphSize);
+	var bounds = this._findBounds(glyphData);
+	
+	return {
+		data: glyphData, 
+		offset: {x: bounds.min.x, y: bounds.min.y}, 
+		size: {x: bounds.max.x-bounds.min.x+1, y: bounds.max.y-bounds.min.y+1},
+		advance: (advance)|0
+	};
+};
+
+FontBitmap.prototype._findBounds = function(imageData) {
+	var w = imageData.width,
+		h = imageData.height,
+		px = imageData.data,
+		minX = Infinity,
+		minY = Infinity,
+		maxX = 0,
+		maxY = 0;
+
+	var i = 0;
+	for (var y = 0; y < h; y++) {
+		for (var x = 0; x < w; x++, i += 4) {
+			if (px[i]) {
+				minX = x < minX ? x : minX;
+				minY = y < minY ? y : minY;
+				maxX = x > maxX ? x : maxX;
+				maxY = y > maxY ? y : maxY;
+			}
+		}
+	}
+
+	minX = Math.min(minX, maxX);
+	minY = Math.min(minY, maxY);
+	return {min:{x: minX, y: minY}, max:{x: maxX, y: maxY}};
+};
+
+FontBitmap.prototype._finished = function() {
+	// Resize to final height
+	var w = this.outputCanvas.width,
+		h = this.currentY + this.currentMaxHeight + 2;
+
+	var fd = this.outputCtx.getImageData(0,0, w, h);
+
+	this.outputCanvas.height = h;
+	this.outputCtx.putImageData(fd, 0, 0);
+
+	if (this.finishedCallback) {
+		this.finishedCallback(this);
+	}
+};
+
+FontBitmap.prototype._getDefinition = function() {
+	return JSON.stringify({
+		height: Math.round(this.outputSize/2),
+		first_char: this.firstChar,
+		last_char: this.lastChar,
+		metrics: this.metrics
+	});
+};
+
+FontBitmap.prototype.getDefinitionFile = function() {
+	return 'data:application/json;base64,' + btoa(this._getDefinition());
+};
+
+FontBitmap.prototype.getGlyphImage = function() {
+	return this.outputCanvas.toDataURL("image/png");
+};
+
+FontBitmap.DrawGlyph = function(ctx, glyph, x, y) {
+	ctx.fillText(glyph, x, y);
+};
+
+
+// -----------------------------------------------------------------------------
+// Pixel Fonts
+
+var FontBitmapPixel = function(outputCanvas, glyphCanvas, fontName, fontStyle, fontSize, spacing, drawFunction) {
+	FontBitmap.call(this, outputCanvas, glyphCanvas, fontName, fontStyle, fontSize, spacing, drawFunction);
+
+	this.outputCanvas.style.webkitFontSmoothing = 'none';
+	this.outputCanvas.style.imageRendering = 'pixelated ';
+	this.glyphCanvas.style.webkitFontSmoothing = 'none';
+	this.glyphCanvas.style.imageRendering = 'pixelated ';
+};
+
+FontBitmapPixel.prototype = Object.create(FontBitmap.prototype);
+
+
+FontBitmapPixel.prototype._getGlyph = function(idx) {
+	var g = FontBitmap.prototype._getGlyph.call(this, idx);
+
+	// Clamp pixel data to 0 or 255
+	var pixels = g.data.data;
+	for (var i = 0; i < pixels.length; i+=4) {
+		if (pixels[i+3] < 128) {
+			pixels[i+3] = 0;
+		}
+		else {
+			pixels[i+3] = 255;	
+		}
+	}
+
+	return g;
+};
+
+
+// -----------------------------------------------------------------------------
+// UI
+
+var $ = function(selector) { return document.querySelector(selector); }
+var $$ = function(selector) { return document.querySelectorAll(selector); }
+
+var FontTool = function() {
+	this.font = null;
+	this.renderType = 'Bitmap';
+	this.fontName = 'Times New Roman';
+
+	this.$fontFaceCSS = $('#font-face-css');
+	this.$fontLocalFile = $('#font-local-file');
+	this.$loadCSS = $('#load-css');
+	this.$fontStyle = $('#font-style');
+	this.$fontSize = $('#font-size');
+	this.$fontSpacing = $('#font-spacing');
+	this.$outputWidth = $('#output-width');
+	this.$characterRange = $('#character-range');
+	this.$renderType = $('#render-type');
+	this.$drawFunction = $('#glyph-draw-function');
+	this.$generate = $('#generate');
+
+	this.$glyphCanvas = $('#glyph-canvas');
+	this.$outputCanvas = $('#output-canvas');
+
+	this.$fontDownloadDefinition = $('#font-download-definition');
+	this.$fontDownloadImage = $('#font-download-image');
+
+	this.$sectionFontFaceDeclaration = $('#section-font-face-declaration');
+	this.$sectionSelectedFontPreview = $('#section-selected-font-preview');
+	this.$sectionGeneratorSettings = $('#section-generator-settings');
+	this.$sectionIntermediateOutput = $('#section-intermediate-output');
+	this.$sectionGeneratedFont = $('#section-generated-font');
+
+	this.$renderType.addEventListener('change', this.setRenderType.bind(this));
+	this.$generate.addEventListener('click', this.generate.bind(this));
+	this.$loadCSS.addEventListener('click', this.loadFontFaceCSS.bind(this));
+	this.$fontLocalFile.addEventListener('change', this.loadLocalFile.bind(this));
+
+	$('#glyph-draw-preset').onchange = function(ev) {
+		$('#glyph-draw-function').value = $('#' + ev.currentTarget.value).value;
+	};
+
+	if (this.$fontFaceCSS.value === '') {
+		this.setFontFaceCSS('sans-serif');
+	}
+
+	this._localFontData = null;
+	this.setRenderType();
+	this.$sectionFontFaceDeclaration.style.display = 'block';
+}
+
+FontTool.prototype.loadLocalFile = function() {
+	var file = this.$fontLocalFile.files[0];
+	if (!file) {
+		return;
+	}
+	var name = file.name.match(/^(.*)\.\w+$/)[1];
+
+	var reader = new FileReader();
+	reader.onload = (function(ev) {
+		this._localFontData = ev.target.result;
+		this.setFontFaceCSS(name, 'url(LOCAL_FONT_DATA)');
+		this.loadFontFaceCSS();
+	}).bind(this);
+	reader.readAsDataURL(file);
+}
+
+FontTool.prototype.setFontFaceCSS = function(name, source) {
+	this.$fontFaceCSS.value = [
+		'@font-face {',
+		'	font-family: "'+name+'";',
+		(source ? '	src: '+source+';' : ''),
+		'}'
+	].join('\n');
+}
+
+FontTool.prototype.loadFontFaceCSS = function() {
+	var css = this.$fontFaceCSS.value;
+	var fm = css.match(/font-family:\s*['"]?(.*?)['"]?\s*;/);
+	
+	if (fm) {
+		this.fontName = fm[1];
+		if (this._localFontData) {
+			css = css.replace(/LOCAL_FONT_DATA/, this._localFontData);
+		}
+
+		document.getElementById('font-face-style').innerHTML = css;
+		document.getElementById('preview').style.fontFamily = "'"+this.fontName+"'";
+		document.getElementById('font-name').textContent = this.fontName;
+	}
+
+	this.$sectionSelectedFontPreview.style.display = 'block';
+	this.$sectionGeneratorSettings.style.display = 'block';
+	this.$sectionIntermediateOutput.style.display = 'none';
+	this.$sectionGeneratedFont.style.display = 'none';
+}
+
+FontTool.prototype.setRenderType = function() {
+	var els = $$('.render-type-setting');
+	for (var i = 0; i < els.length; i++) {
+		els[i].style.display = els[i].className.match(this.$renderType.value)
+			? 'inline'
+			: 'none';
+	}
+}
+
+FontTool.prototype.generate = function() {
+	if (this.font && this.font.isGenerating) {
+		this.font.cancel();
+		return;
+	}
+
+	var fontStyle = this.$fontStyle.value,
+		lastChar = parseInt(this.$characterRange.value),
+		size = parseInt(this.$fontSize.value),
+		spacing = this.$fontSpacing.value,
+		drawFunction = new Function("ctx", "glyph", "x", "y", this.$drawFunction.value);
+
+	this.$outputCanvas.width = parseInt(this.$outputWidth.value);
+
+	if (this.$renderType.value === 'Bitmap') {
+		this.font = new FontBitmap(this.$outputCanvas, this.$glyphCanvas, this.fontName, fontStyle, size, spacing, drawFunction);
+	}
+	else if (this.$renderType.value === 'Pixel') {
+		this.font = new FontBitmapPixel(this.$outputCanvas, this.$glyphCanvas, this.fontName, fontStyle, size, spacing, drawFunction);
+	}
+
+	this.$generate.value = 'Cancel';
+	this.$sectionIntermediateOutput.style.display = 'block';
+	this.$sectionGeneratedFont.style.display = 'none';
+
+	this.font.generate(32, lastChar, this.generated.bind(this));
+}
+
+FontTool.prototype.generated = function(font) {
+	var spans = $$('.font-file-name');
+	for (var i = 0; i < spans.length; i++) {
+		spans[i].textContent = font.fileName;
+	}
+
+	this.$fontDownloadDefinition.download = 'font_'+font.fileName + '.json';
+	this.$fontDownloadDefinition.href = font.getDefinitionFile();
+
+	this.$fontDownloadImage.download = 'font_'+font.fileName + '.png';
+	this.$fontDownloadImage.href = font.getGlyphImage();		
+
+	this.$sectionGeneratedFont.style.display = 'block';
+	this.$generate.value = 'Generate';
+}
+
+
+var fontTool = new FontTool();
+
+</script>
+
+</body>
+</html>
