@@ -2,8 +2,8 @@
 #define HI_CAMERA_H
 
 // A camera allows you to follow entities and move smoothly to a new position.
-// You can also specify a deadzone and lookahead to adapt move the viewport
-// closer to the action. Using a camera is totally optional; you could instead
+// You can also specify a deadzone and lookahead to move the viewport closer
+// to the action. Using a camera is totally optional; you could instead
 // manipulate the engine.viewport directly if you wish.
 
 // Cameras can be instantiated from just a camera_t, i.e.:

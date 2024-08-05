@@ -35,7 +35,7 @@ void image_draw_ex(image_t *img, vec2_t src_pos, vec2_t src_size, vec2_t dst_pos
 // Draw a single tile from the image, as subdivided by tile_size
 void image_draw_tile(image_t *img, uint32_t tile, vec2i_t tile_size, vec2_t dst_pos);
 
-// Draw a single tile an specify x/y flipping and a tint color
+// Draw a single tile and specify x/y flipping and a tint color
 void image_draw_tile_ex(image_t *img, uint32_t tile, vec2i_t tile_size, vec2_t dst_pos, bool flip_x, bool flip_y, rgba_t color);
 
 // Called by the engine to manage image memory

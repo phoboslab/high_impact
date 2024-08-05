@@ -1,17 +1,15 @@
 #ifndef HI_ENGINE_H
 #define HI_ENGINE_H
 
-// The engine is the main wrapper around your. For every frame, it will update
-// your scene, update all entities and draw the whole frame.
+// The engine is the main wrapper around your game. For every frame, it will 
+// update your scene, update all entities and draw the whole frame.
 
 // The engine takes care of timekeeping, a number background maps, a collision 
-// map some more global state. There's only one engine_t instance in high_impact
-// and it's globally available at `engine`
+// map and some more global state. There's only one engine_t instance in 
+// high_impact and it's globally available at `engine`
 
 #include "types.h"
 #include "map.h"
-
-#include "../libs/pl_json.h"
 
 
 // The maximum difference in seconds from one frame to the next. If the 

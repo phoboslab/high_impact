@@ -2,9 +2,9 @@
 #define HI_FONT_H
 
 // Fonts are a wrapper around image() that makes it easier to draw text on the
-// screen. The image must contains all ASCII characters from 32..127 on a single
-// line and the width map must be a json file consisting of a single array of 
-// 95 numbers that specify the width of each character.
+// screen. The font image contains all glyphs and is accompanied by a json
+// file that specifies the position, size and advance width of each glyph.
+// Use the font_tool.html to create the image and json.
 
 #include "types.h"
 #include "image.h"

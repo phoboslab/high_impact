@@ -46,17 +46,17 @@ void entities_init(void) {
 	ENTITY_TYPES(ENTITY_INIT_VTAB)
 
 	for (uint32_t i = 0; i < ENTITY_TYPES_COUNT; i++) {
-		if (entity_vtab[i].load == NULL)     { entity_vtab[i].load = noop_load; }
-		if (entity_vtab[i].init == NULL)     { entity_vtab[i].init = noop_init; }
-		if (entity_vtab[i].settings == NULL) { entity_vtab[i].settings = noop_settings; }
-		if (entity_vtab[i].update == NULL)   { entity_vtab[i].update = entity_base_update; }
-		if (entity_vtab[i].draw == NULL)     { entity_vtab[i].draw = entity_base_draw; }
-		if (entity_vtab[i].kill == NULL)     { entity_vtab[i].kill = noop_kill; }
-		if (entity_vtab[i].touch == NULL)    { entity_vtab[i].touch = noop_touch; }
-		if (entity_vtab[i].collide == NULL)  { entity_vtab[i].collide = noop_collide; }
-		if (entity_vtab[i].damage == NULL)   { entity_vtab[i].damage = entity_base_damage; }
-		if (entity_vtab[i].trigger == NULL)  { entity_vtab[i].trigger = noop_trigger; }
-		if (entity_vtab[i].message == NULL)  { entity_vtab[i].message = noop_message; }
+		if (!entity_vtab[i].load)     { entity_vtab[i].load = noop_load; }
+		if (!entity_vtab[i].init)     { entity_vtab[i].init = noop_init; }
+		if (!entity_vtab[i].settings) { entity_vtab[i].settings = noop_settings; }
+		if (!entity_vtab[i].update)   { entity_vtab[i].update = entity_base_update; }
+		if (!entity_vtab[i].draw)     { entity_vtab[i].draw = entity_base_draw; }
+		if (!entity_vtab[i].kill)     { entity_vtab[i].kill = noop_kill; }
+		if (!entity_vtab[i].touch)    { entity_vtab[i].touch = noop_touch; }
+		if (!entity_vtab[i].collide)  { entity_vtab[i].collide = noop_collide; }
+		if (!entity_vtab[i].damage)   { entity_vtab[i].damage = entity_base_damage; }
+		if (!entity_vtab[i].trigger)  { entity_vtab[i].trigger = noop_trigger; }
+		if (!entity_vtab[i].message)  { entity_vtab[i].message = noop_message; }
 	}
 
 	// Call load function on all entity types

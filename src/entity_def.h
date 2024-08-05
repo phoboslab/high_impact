@@ -123,7 +123,7 @@ typedef struct entity_t entity_t;
 		float gravity; /* Gravity factor with engine.gravity. Default 1.0 */ \
 		float mass; /* Mass factor for active collisions. Default 1.0 */\
 		float restitution; /* The "bounciness factor" */ \
-		float max_ground_normal; /* For slopes, determines on how steep the slope can be to set on_ground flag. Default cosf(to_radians(46)) */ \
+		float max_ground_normal; /* For slopes, determines how steep the slope can be to set on_ground flag. Default cosf(to_radians(46)) */ \
 		float min_slide_normal; /* For slopes, determines how steep the slope has to be for entity to slide down. Default cosf(to_radians(0)) */ \
 		anim_t anim; /* The animation that is automatically drawn */ \
 		__VA_ARGS__ /* Your own properties, defined through ENTITY_DEFINE(...) */ \

@@ -29,7 +29,7 @@ typedef struct sound_source_t sound_source_t;
 typedef struct { uint16_t id; uint16_t index; } sound_t;
 typedef struct { uint32_t index; } sound_mark_t;
 
-// Called by the engine to manage image memory
+// Called by the engine to manage sound memory
 sound_mark_t sound_mark(void);
 void sound_reset(sound_mark_t mark);
 
