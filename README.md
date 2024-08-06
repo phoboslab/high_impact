@@ -38,7 +38,7 @@ some insights into the decisions made here.
 
 ## Compiling
 
-No Makefile is provided here as high_impact must be compiled together with your
+No Makefile is provided here, as high_impact must be compiled together with your
 game. It can not be compiled as a standalone library.
 
 It's best to start your development with one of the examples above as the basis.
@@ -47,7 +47,7 @@ These examples come with a Makefile that should *just work*™
 ## Documentation
 
 There's not much at the moment. Most of high_impact's functionality is
-documented in the header files with this README giving a general overview.
+documented in the header files, with this README giving a general overview.
 It's best to read [the blog post](https://phoboslab.org/log/2024/08/high_impact)
 for an overview and the source for all the details: It's just ~4000 lines of
 code.
