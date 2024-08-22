@@ -21,7 +21,7 @@
 // The scale mode determines if and how the logical size will be scaled up when
 // the window is larger than the render size. Note that the desired aspect ratio
 // will be maintained (depending on RESIZE_MODE).
-// RENDER_RESIZE_NONE    - no scaling
+// RENDER_SCALE_NONE     - no scaling
 // RENDER_SCALE_DISCRETE - scale in integer steps for perfect pixel scaling
 // RENDER_SCALE_EXACT    - scale exactly to the window size
 #if !defined(RENDER_SCALE_MODE)
