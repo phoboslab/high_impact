@@ -332,7 +332,6 @@ char *platform_get_base_path(void) {
 		}
 		dir = buf;
 	#elif defined(__APPLE__)
-		uint32_t pathSize = (uint32_t)buf_len;
 		int err =_NSGetExecutablePath(buf, &buf_len);
 		if (err != 0) {
 			return path_cwd;
