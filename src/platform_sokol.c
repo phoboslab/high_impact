@@ -21,6 +21,9 @@
 #include "../libs/sokol_app.h"
 #include "input.h"
 
+#define QOP_IMPLEMENTATION
+#include "../libs/qop.h"
+
 // Dependencies for platform_get_base_path()
 #if defined(_WIN32)
 	#include <windows.h>
@@ -36,6 +39,7 @@
 static char *path_assets = "";
 static char *path_userdata = "";
 static char *temp_path = NULL;
+static qop_desc qop = {0};
 
 static uint32_t platform_output_samplerate = 44100;
 
@@ -273,6 +277,16 @@ void platform_set_audio_mix_cb(void (*cb)(float *buffer, uint32_t len)) {
 }
 
 uint8_t *platform_load_asset(const char *name, uint32_t *bytes_read) {
+	// Try to load from the QOP archive first
+	if (qop.index_len) {
+		qop_file *f = qop_find(&qop, name);
+		if (f) {
+			uint8_t *data = temp_alloc(f->size);
+			*bytes_read = qop_read(&qop, f, data);
+			return data;
+		}
+	}
+
 	char *path = strcat(strcpy(temp_path, path_assets), name);
 	return file_load(path, bytes_read);
 }
@@ -295,6 +309,10 @@ void platform_cleanup(void) {
 	engine_cleanup();
 	sound_cleanup();
 	saudio_shutdown();
+
+	if (qop.index_len) {
+		qop_close(&qop);
+	}
 }
 
 static char *path_cwd = "";
@@ -350,6 +368,13 @@ sapp_desc sokol_main(int argc, char* argv[]) {
 	#else
 		path_userdata = platform_get_base_path();
 	#endif
+
+	// Try to open a QOP package that may have been appended to the executable
+	// for a release build. All assets will be loaded from this archive then.
+	if (argc > 0 && qop_open(argv[0], &qop)) {
+		printf("Opened QOP archive from %s; %d bytes, %d files\n", argv[0], qop.files_offset, qop.index_len);
+		qop_read_index(&qop, bump_alloc(qop.hashmap_size));
+	}
 
 	temp_path = bump_alloc(max(strlen(path_assets), strlen(path_userdata)) + PLATFORM_MAX_PATH);
 

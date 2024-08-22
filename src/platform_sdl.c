@@ -9,6 +9,10 @@
 #include "utils.h"
 #include "alloc.h"
 
+#define QOP_IMPLEMENTATION
+#include "../libs/qop.h"
+
+
 static uint64_t perf_freq = 0;
 static bool wants_to_exit = false;
 static SDL_Window *window;
@@ -19,6 +23,7 @@ static char *path_assets = "";
 static char *path_userdata = "";
 static char *temp_path = NULL;
 static uint32_t platform_output_samplerate = 44100;
+static qop_desc qop = {0};
 
 
 static const uint8_t platform_sdl_gamepad_map[] = {
@@ -237,6 +242,16 @@ void platform_set_audio_mix_cb(void (*cb)(float *buffer, uint32_t len)) {
 
 
 uint8_t *platform_load_asset(const char *name, uint32_t *bytes_read) {
+	// Try to load from the QOP archive first
+	if (qop.index_len) {
+		qop_file *f = qop_find(&qop, name);
+		if (f) {
+			uint8_t *data = temp_alloc(f->size);
+			*bytes_read = qop_read(&qop, f, data);
+			return data;
+		}
+	}
+
 	char *path = strcat(strcpy(temp_path, path_assets), name);
 	return file_load(path, bytes_read);
 }
@@ -379,7 +394,15 @@ int main(int argc, char *argv[]) {
 
 	// Reserve some space for concatenating the asset and userdata paths with
 	// local filenames.
-	temp_path = bump_alloc(max(strlen(path_assets), strlen(path_userdata)) + 64);
+	temp_path = bump_alloc(max(strlen(path_assets), strlen(path_userdata)) + PLATFORM_MAX_PATH);
+
+
+	// Try to open a QOP package that may have been appended to the executable
+	// for a release build. All assets will be loaded from this archive then.
+	if (argc > 0 && qop_open(argv[0], &qop)) {
+		printf("Opened QOP archive from %s; %d bytes, %d files\n", argv[0], qop.files_offset, qop.index_len);
+		qop_read_index(&qop, bump_alloc(qop.hashmap_size));
+	}
 
 	// Load gamecontrollerdb.txt if present.
 	// FIXME: Should this load from userdata instead?
@@ -389,7 +412,7 @@ int main(int argc, char *argv[]) {
 		printf("Failed to load gamecontrollerdb.txt\n");
 	}
 	else {
-		printf("load gamecontrollerdb.txt\n");
+		printf("Loaded gamecontrollerdb.txt\n");
 	}
 
 
@@ -430,6 +453,10 @@ int main(int argc, char *argv[]) {
 
 	engine_cleanup();
 	platform_video_cleanup();
+
+	if (qop.index_len) {
+		qop_close(&qop);
+	}
 
 	SDL_DestroyWindow(window);
 
