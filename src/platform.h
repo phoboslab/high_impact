@@ -37,6 +37,12 @@
 	#define PLATFORM_VSYNC 1
 #endif
 
+
+// The max path length when loading/storing files
+#if !defined(PLATFORM_MAX_PATH)
+	#define PLATFORM_MAX_PATH 512
+#endif
+
 // Return the current size of the window or render area in real pixels
 vec2i_t platform_screen_size(void);
 

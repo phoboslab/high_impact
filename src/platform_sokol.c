@@ -21,22 +21,22 @@
 #include "../libs/sokol_app.h"
 #include "input.h"
 
-
-// FIXME: we should figure out the actual path where the executabe resides,
-// instead of just assuming it's in the pwd
-#ifdef PATH_ASSETS
-	static const char *path_assets = TOSTRING(PATH_ASSETS);
-#else
-	static const char *path_assets = "";
+// Dependencies for platform_get_base_path()
+#if defined(_WIN32)
+	#include <windows.h>
+#elif defined(__APPLE__)
+	#include <mach-o/dyld.h>
+	#include <libgen.h>
+#elif defined(__linux__)
+	#include <unistd.h>
+	#include <limits.h>
+	#include <libgen.h>
 #endif
 
-#ifdef PATH_USERDATA
-	static const char *path_userdata = TOSTRING(PATH_USERDATA);
-#else
-	static const char *path_userdata = "";
-#endif
+static char *path_assets = "";
+static char *path_userdata = "";
+static char *temp_path = NULL;
 
-static char *temp_path;
 static uint32_t platform_output_samplerate = 44100;
 
 static const uint8_t keyboard_map[] = {
@@ -297,11 +297,64 @@ void platform_cleanup(void) {
 	saudio_shutdown();
 }
 
+static char *path_cwd = "";
+char *platform_get_base_path(void) {
+	uint32_t buf_len = 2048;
+	char buf[buf_len];
+	char *dir;
+
+	#if defined(_WIN32)
+		int len = GetModuleFileName(NULL, buf, (DWORD)buf_len);
+		if (len == 0 || len > buf_len - 2) {
+			return path_cwd;
+		}
+		char *last_slash = strrchr(buf, '\\');
+		if (last_slash != NULL) {
+			*last_slash = '\0';
+		}
+		dir = buf;
+	#elif defined(__APPLE__)
+		uint32_t pathSize = (uint32_t)buf_len;
+		int err =_NSGetExecutablePath(buf, &buf_len);
+		if (err != 0) {
+			return path_cwd;
+		}
+		dir = dirname(buf);
+	#elif defined(__linux__)
+		ssize_t len = readlink("/proc/self/exe", buf, buf_len - 1);
+		if (len == -1) {
+			return path_cwd;
+		}
+		buf[len] = '\0';
+		dir = dirname(buf);
+	#endif
+
+	return str_format("%s/", dir);
+}
+
 sapp_desc sokol_main(int argc, char* argv[]) {
-	temp_path = bump_alloc(max(strlen(path_assets), strlen(path_userdata)) + 64);
+	// Resolve the path the executable is in. This will be used as the base
+	// dir for assets and userdata if PATH_ASSETS or PATH_USERDATA is not set
+	// during compile time.
+	// FIXME: path_userdata should probably point to some place in the home 
+	// directory (similar to SDL_GetPrefPath() for SDL).
+	#ifdef PATH_ASSETS
+		path_assets = TOSTRING(PATH_ASSETS);
+	#else
+		path_assets = platform_get_base_path();
+	#endif
+
+	char *sdl_path_userdata = NULL;
+	#ifdef PATH_USERDATA
+		path_userdata = TOSTRING(PATH_USERDATA);
+	#else
+		path_userdata = platform_get_base_path();
+	#endif
+
+	temp_path = bump_alloc(max(strlen(path_assets), strlen(path_userdata)) + PLATFORM_MAX_PATH);
+
 
 	stm_setup();
-
 	saudio_setup(&(saudio_desc){
 		.sample_rate = platform_output_samplerate,
 		.buffer_frames = 1024,
