@@ -344,6 +344,8 @@ char *platform_get_base_path(void) {
 		}
 		buf[len] = '\0';
 		dir = dirname(buf);
+	#else
+		return path_cwd;
 	#endif
 
 	return str_format("%s/", dir);
