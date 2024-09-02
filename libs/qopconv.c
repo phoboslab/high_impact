@@ -309,8 +309,8 @@ void pack(const char *read_dir, char **sources, int sources_len, const char *arc
 		total_size += 20;
 	}
 
-	write_32(total_size, dest);
 	write_32(state.len, dest);
+	write_32(total_size, dest);
 	write_32(QOP_MAGIC, dest);
 
 	free(state.files);

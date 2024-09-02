@@ -32,11 +32,11 @@ struct {
 		uint16_t flags;
 	} qop_file[];
 
-	// Beginning of the archive from file end
-	uint32_t files_offset; 
-
 	// The number of files in the index
 	uint32_t index_len;
+
+	// The size of the whole archive, including the header
+	uint32_t archive_size; 
 
 	// Magic bytes "qopf"
 	uint32_t magic;
@@ -60,8 +60,9 @@ extern "C" {
 #include <string.h>
 
 #define QOP_FLAG_NONE               0
-#define QOP_FLAG_COMPRESSED_ZSTD    1
-#define QOP_FLAG_COMPRESSED_DEFLATE 2
+#define QOP_FLAG_COMPRESSED_ZSTD    (1 << 0)
+#define QOP_FLAG_COMPRESSED_DEFLATE (1 << 1)
+#define QOP_FLAG_ENCRYPTED          (1 << 8)
 
 typedef struct {
 	unsigned long long hash;
@@ -98,13 +99,13 @@ void qop_close(qop_desc *qop);
 // Find a file with the supplied path. Returns NULL if the file is not found
 qop_file *qop_find(qop_desc *qop, const char *path);
 
+// Copy the path of the file into dest. The dest buffer must be at least 
+// file->path_len bytes long. The path is null terminated.
+int qop_read_path(qop_desc *qop, qop_file *file, char *dest);
+
 // Read the whole file into dest. The dest buffer must be at least file->size
 // bytes long.
 int qop_read(qop_desc *qop, qop_file *file, unsigned char *dest);
-
-// Copy the path of the file into dest. The dest buffer must be at least 
-// file->path_len bytes long.
-int qop_read_path(qop_desc *qop, qop_file *file, char *dest);
 
 // Read part of a file into dest. The dest buffer must be at least len bytes
 // long
@@ -135,7 +136,7 @@ typedef unsigned long long qop_uint64_t;
 static inline qop_uint64_t qop_hash(const char *key) {
 	qop_uint64_t h = 525201411107845655ull;
 	for (;*key;++key) {
-		h ^= *key;
+		h ^= (unsigned char)*key;
 		h *= 0x5bd1e9955bd1e995ull;
 		h ^= h >> 47;
 	}
@@ -185,12 +186,15 @@ int qop_open(const char *path, qop_desc *qop) {
 
 	qop->fh = fh;
 	qop->hashmap = NULL;
-	qop->files_offset  = size - qop_read_32(fh);
 	unsigned int index_len = qop_read_32(fh);
+	unsigned int archive_size = qop_read_32(fh);
 	unsigned int magic = qop_read_32(fh);
 
 	// Check magic, make sure index_len is possible with the file size
-	if (magic != QOP_MAGIC && index_len < (unsigned int)size * QOP_INDEX_SIZE) {
+	if (
+		magic != QOP_MAGIC &&
+		index_len * QOP_INDEX_SIZE <= (unsigned int)(size - QOP_HEADER_SIZE)
+	) {
 		fclose(fh);
 		return 0;
 	}
@@ -202,6 +206,7 @@ int qop_open(const char *path, qop_desc *qop) {
 		hashmap_len <<= 1;
 	}
 
+	qop->files_offset  = size - archive_size;
 	qop->index_len = index_len;
 	qop->index_offset = size - qop->index_len * QOP_INDEX_SIZE - QOP_HEADER_SIZE;
 	qop->hashmap_len = hashmap_len;
@@ -254,6 +259,11 @@ qop_file *qop_find(qop_desc *qop, const char *path) {
 	return NULL;
 }
 
+int qop_read_path(qop_desc *qop, qop_file *file, char *dest) {
+	fseek(qop->fh, qop->files_offset + file->offset, SEEK_SET);
+	return fread(dest, 1, file->path_len, qop->fh);
+}
+
 int qop_read(qop_desc *qop, qop_file *file, unsigned char *dest) {
 	fseek(qop->fh, qop->files_offset + file->offset + file->path_len, SEEK_SET);
 	return fread(dest, 1, file->size, qop->fh);
@@ -264,9 +274,5 @@ int qop_read_ex(qop_desc *qop, qop_file *file, unsigned char *dest, unsigned int
 	return fread(dest, 1, len, qop->fh);
 }
 
-int qop_read_path(qop_desc *qop, qop_file *file, char *dest) {
-	fseek(qop->fh, qop->files_offset + file->offset, SEEK_SET);
-	return fread(dest, 1, file->path_len, qop->fh);
-}
 
 #endif /* QOP_IMPLEMENTATION */
