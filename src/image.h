@@ -20,7 +20,7 @@ typedef struct image_t image_t;
 image_t *image_with_pixels(vec2i_t size, rgba_t *pixels);
 
 // Load an image from a QOI file. Calling this function multiple times with the
-// same path will return the same, cached image instance,
+// same path will return the same, cached image instance.
 image_t *image(char *path);
 
 // Return the size of an image

@@ -98,7 +98,8 @@ extern engine_t engine;
 // scene and scene->init() on the new one. The actual swap of scenes happens
 // at the beginning of the next frame, so it's ok to call engine_set_scene()
 // from the middle of a frame.
-// Your main_init() function must call engine_set_scene() to set first scene.
+// Your main_init() function must call engine_set_scene() to set the initial
+// first scene.
 void engine_set_scene(scene_t *scene);
 
 // Load a level (background maps, collision map and entities) from a json path.

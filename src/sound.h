@@ -65,8 +65,8 @@ sound_t sound(sound_source_t *source);
 // once it has played through.
 void sound_play(sound_source_t *source);
 
-// Play a sound source with the given volume and pitch. The node used to play it
-// will be automatically disposed once it has played through.
+// Play a sound source with the given volume, pan and pitch. The node used to 
+// play it will be automatically disposed once it has played through.
 void sound_play_ex(sound_source_t *source, float volume, float pan, float pitch);
 
 // Unpauses a paused node

@@ -196,7 +196,7 @@ const char *input_button_to_name(button_t button);
 
 // Returns the current state for an action. For discrete buttons and keyboard
 // keys, this is either 0 or 1. For analog input, it is anywhere between
-// 0..1.
+// INPUT_DEADZONE and 1.
 float input_state(uint8_t action);
 
 // Whether a button for that action was just pressed down before this frame

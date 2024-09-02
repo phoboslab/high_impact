@@ -363,7 +363,6 @@ sapp_desc sokol_main(int argc, char* argv[]) {
 		path_assets = platform_get_base_path();
 	#endif
 
-	char *sdl_path_userdata = NULL;
 	#ifdef PATH_USERDATA
 		path_userdata = TOSTRING(PATH_USERDATA);
 	#else
