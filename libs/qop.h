@@ -91,6 +91,7 @@ int qop_open(const char *path, qop_desc *qop);
 // with the index data and must be at least qop->hashmap_size bytes long.
 // No ownership is taken of the buffer; if you allocated it with malloc() you
 // need to free() it yourself after qop_close();
+// Returns the number of files in the archive or 0 on error.
 int qop_read_index(qop_desc *qop, void *buffer);
 
 // Close the archive
@@ -101,14 +102,17 @@ qop_file *qop_find(qop_desc *qop, const char *path);
 
 // Copy the path of the file into dest. The dest buffer must be at least 
 // file->path_len bytes long. The path is null terminated.
+// Returns the path length (including the null terminater) or 0 on error.
 int qop_read_path(qop_desc *qop, qop_file *file, char *dest);
 
 // Read the whole file into dest. The dest buffer must be at least file->size
 // bytes long.
+// Returns the number of bytes read
 int qop_read(qop_desc *qop, qop_file *file, unsigned char *dest);
 
 // Read part of a file into dest. The dest buffer must be at least len bytes
-// long
+// long.
+// Returns the number of bytes read.
 int qop_read_ex(qop_desc *qop, qop_file *file, unsigned char *dest, unsigned int start, unsigned int len);
 
 

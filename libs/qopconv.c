@@ -10,7 +10,6 @@ Command line tool to create and unpack qop archives
 
 #define _DEFAULT_SOURCE
 #include <stdlib.h>
-#include <dirent.h>
 #include <string.h>
 #include <unistd.h>
 #include <sys/stat.h>
@@ -19,9 +18,10 @@ Command line tool to create and unpack qop archives
 #define QOP_IMPLEMENTATION
 #include "qop.h"
 
-#define MAX_PATH 1024
+#define MAX_PATH_LEN 1024
 #define BUFFER_SIZE 4096
 
+#define UNUSED(x) (void)(x)
 #define STRINGIFY(x) #x
 #define TOSTRING(x) STRINGIFY(x)
 #define die(...) \
@@ -34,18 +34,115 @@ Command line tool to create and unpack qop archives
 		die(__VA_ARGS__); \
 	}
 
+
+// -----------------------------------------------------------------------------
+// Platform specific file/dir handling
+
+typedef struct {
+	char *name;
+	unsigned char is_dir;
+	unsigned char is_file;
+} pi_dirent;
+
+#if defined(_WIN32)
+	#include <windows.h>
+
+	typedef struct {
+		WIN32_FIND_DATA data;
+		pi_dirent current;
+		HANDLE dir;
+		unsigned char is_first;
+	} pi_dir;
+		
+	pi_dir *pi_dir_open(const char *path) {
+		char find_str[MAX_PATH_LEN];
+		snprintf(find_str, MAX_PATH_LEN, "%s/*", path);
+
+		pi_dir *d = malloc(sizeof(pi_dir));
+		d->is_first = 1;
+		d->dir = FindFirstFile(find_str, &d->data);
+		if (d->dir == INVALID_HANDLE_VALUE) {
+			free(d);
+			return NULL;
+		}
+		return d;
+	}
+
+	pi_dirent *pi_dir_next(pi_dir *d) {
+		if (!d->is_first) {
+			if (FindNextFile(d->dir, &d->data) == 0) {
+				return NULL;
+			}
+		}
+		d->is_first = 0;
+		d->current.name = d->data.cFileName;
+		d->current.is_dir = d->data.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY;
+		d->current.is_file = !d->current.is_dir;
+		return &d->current;
+	}
+
+	void pi_dir_close(pi_dir *d) {
+		FindClose(d->dir);
+		free(d);
+	}
+
+	int pi_mkdir(char *path, int mode) {
+		UNUSED(mode);
+		return CreateDirectory(path, NULL) ? 0 : -1;
+	}
+#else
+	#include <dirent.h>
+	
+	typedef struct {
+		DIR *dir;
+		struct dirent *data;
+		pi_dirent current;
+	} pi_dir;
+		
+	pi_dir *pi_dir_open(const char *path) {
+		DIR *dir = opendir(path);
+		if (!dir) {
+			return NULL;
+		}
+		pi_dir *d = malloc(sizeof(pi_dir));
+		d->dir = dir;
+		return d;
+	}
+
+	pi_dirent *pi_dir_next(pi_dir *d) {
+		d->data = readdir(d->dir);
+		if (!d->data) {
+			return NULL;
+		}
+		d->current.name = d->data->d_name;
+		d->current.is_dir = d->data->d_type & DT_DIR;
+		d->current.is_file = d->data->d_type == DT_REG;
+		return &d->current;
+	}
+
+	void pi_dir_close(pi_dir *d) {
+		closedir(d->dir);
+		free(d);
+	}
+
+	int pi_mkdir(char *path, int mode) {
+		return mkdir(path, mode);
+	}
+#endif
+
+
 // -----------------------------------------------------------------------------
 // Unpack
 
 int create_path(const char *path, const mode_t mode) {
-	char tmp[MAX_PATH];
+	char tmp[MAX_PATH_LEN];
 	char *p = NULL;
 	struct stat sb;
 	size_t len;
 
 	// copy path
-	len = strnlen(path, MAX_PATH);
-	if (len == 0 || len == MAX_PATH) {
+	len = strnlen(path, MAX_PATH_LEN);
+	if (len == 0 || len == MAX_PATH_LEN) {
 		return -1;
 	}
 	memcpy(tmp, path, len);
@@ -70,7 +167,7 @@ int create_path(const char *path, const mode_t mode) {
 		if (*p == '/') {
 			*p = 0;
 			if (stat(tmp, &sb) != 0) {
-				if (mkdir(tmp, mode) < 0) {
+				if (pi_mkdir(tmp, mode) < 0) {
 					return -1;
 				}
 			}
@@ -81,7 +178,7 @@ int create_path(const char *path, const mode_t mode) {
 		}
 	}
 	if (stat(tmp, &sb) != 0) {
-		if (mkdir(tmp, mode) < 0) {
+		if (pi_mkdir(tmp, mode) < 0) {
 			return -1;
 		}
 	}
@@ -92,7 +189,7 @@ int create_path(const char *path, const mode_t mode) {
 }
 
 unsigned int copy_out(FILE *src, unsigned int offset, unsigned int size, const char *dest_path) {
-	FILE *dest = fopen(dest_path, "w");
+	FILE *dest = fopen(dest_path, "wb");
 	error_if(!dest, "Could not open file %s for writing", dest_path);
 
 	char buffer[BUFFER_SIZE];
@@ -133,8 +230,8 @@ void unpack(const char *archive_path, int list_only) {
 		if (file->size == 0) {
 			continue;
 		}
-		error_if(file->path_len >= MAX_PATH, "Path for file %016llx exceeds %d", file->hash, MAX_PATH);
-		char path[MAX_PATH];
+		error_if(file->path_len >= MAX_PATH_LEN, "Path for file %016llx exceeds %d", file->hash, MAX_PATH_LEN);
+		char path[MAX_PATH_LEN];
 		qop_read_path(&qop, file, path);
 
 		// Integrity check
@@ -196,7 +293,7 @@ void write_64(qop_uint64_t v, FILE *fh) {
 }
 
 unsigned int copy_into(const char *src_path, FILE *dest) {
-	FILE *src = fopen(src_path, "r");
+	FILE *src = fopen(src_path, "rb");
 	error_if(!src, "Could not open file %s for reading", src_path);
 
 	char buffer[BUFFER_SIZE];
@@ -246,30 +343,31 @@ void add_file(const char *path, FILE *dest, pack_state *state) {
 }
 
 void add_dir(const char *path, FILE *dest, pack_state *state) {
-	DIR *dir = opendir(path);
+	pi_dir *dir = pi_dir_open(path);
 	error_if(!dir, "Could not open directory %s for reading", path);
 
-	struct dirent *file;
-	for (int i = 0; (file = readdir(dir)) != NULL; i++) {
+	pi_dirent *entry;
+	while ((entry = pi_dir_next(dir))) {
 		if (
-			file->d_type & DT_DIR &&
-			strcmp(file->d_name, ".") != 0 &&
-			strcmp(file->d_name, "..") != 0
+			entry->is_dir &&
+			strcmp(entry->name, ".") != 0 &&
+			strcmp(entry->name, "..") != 0
 		) {
-			char subpath[MAX_PATH];
-			snprintf(subpath, MAX_PATH, "%s/%s", path, file->d_name);
+			char subpath[MAX_PATH_LEN];
+			snprintf(subpath, MAX_PATH_LEN, "%s/%s", path, entry->name);
 			add_dir(subpath, dest, state);
 		}
-		else if (file->d_type == DT_REG) {
-			char subpath[MAX_PATH];
-			snprintf(subpath, MAX_PATH, "%s/%s", path, file->d_name);
+		else if (entry->is_file) {
+			char subpath[MAX_PATH_LEN];
+			snprintf(subpath, MAX_PATH_LEN, "%s/%s", path, entry->name);
 			add_file(subpath, dest, state);
 		}
 	}
+	pi_dir_close(dir);
 }
 
 void pack(const char *read_dir, char **sources, int sources_len, const char *archive_path) {
-	FILE *dest = fopen(archive_path, "w+");
+	FILE *dest = fopen(archive_path, "wb");
 	error_if(!dest, "Could not open file %s for writing", archive_path);
 
 	pack_state state = {
