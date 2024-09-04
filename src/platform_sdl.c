@@ -399,8 +399,9 @@ int main(int argc, char *argv[]) {
 
 	// Try to open a QOP package that may have been appended to the executable
 	// for a release build. All assets will be loaded from this archive then.
-	if (argc > 0 && qop_open(argv[0], &qop)) {
-		printf("Opened QOP archive from %s; %d bytes, %d files\n", argv[0], qop.files_offset, qop.index_len);
+	char *exe_path = platform_executable_path();
+	if (exe_path && qop_open(exe_path, &qop)) {
+		printf("Opened QOP archive from %s; %d bytes, %d files\n", exe_path, qop.files_offset, qop.index_len);
 		qop_read_index(&qop, bump_alloc(qop.hashmap_size));
 	}
 

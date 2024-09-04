@@ -64,6 +64,14 @@ uint8_t *platform_load_asset(const char *name, uint32_t *bytes_read);
 // Load a json file into temp memory. Must be freed via temp_free()
 json_t *platform_load_asset_json(const char *name);
 
+// Return the path to the current executable, bump allocated. Returns NULL
+// on failure.
+char *platform_executable_path(void);
+
+// Return the directory part of path. A directory separator (/) is appended at
+// the end.
+char *platform_dirname(char *path);
+
 // Load a file from the userdata directory into temp memory. Must be freed via 
 // temp_free(). This can be used for save games or configuration.
 uint8_t *platform_load_userdata(const char *name, uint32_t *bytes_read);

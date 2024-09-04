@@ -24,20 +24,8 @@
 #define QOP_IMPLEMENTATION
 #include "../libs/qop.h"
 
-// Dependencies for platform_get_base_path()
-#if defined(_WIN32)
-	#include <windows.h>
-#elif defined(__APPLE__)
-	#include <mach-o/dyld.h>
-	#include <libgen.h>
-#elif defined(__linux__)
-	#include <unistd.h>
-	#include <limits.h>
-	#include <libgen.h>
-#endif
-
-static char *path_assets = "";
-static char *path_userdata = "";
+static char *path_assets;
+static char *path_userdata;
 static char *temp_path = NULL;
 static qop_desc qop = {0};
 
@@ -315,64 +303,34 @@ void platform_cleanup(void) {
 	}
 }
 
-static char *path_cwd = "";
-char *platform_get_base_path(void) {
-	uint32_t buf_len = 2048;
-	char buf[buf_len];
-	char *dir;
-
-	#if defined(_WIN32)
-		int len = GetModuleFileName(NULL, buf, (DWORD)buf_len);
-		if (len == 0 || len > buf_len - 2) {
-			return path_cwd;
-		}
-		char *last_slash = strrchr(buf, '\\');
-		if (last_slash != NULL) {
-			*last_slash = '\0';
-		}
-		dir = buf;
-	#elif defined(__APPLE__)
-		int err =_NSGetExecutablePath(buf, &buf_len);
-		if (err != 0) {
-			return path_cwd;
-		}
-		dir = dirname(buf);
-	#elif defined(__linux__)
-		ssize_t len = readlink("/proc/self/exe", buf, buf_len - 1);
-		if (len == -1) {
-			return path_cwd;
-		}
-		buf[len] = '\0';
-		dir = dirname(buf);
-	#else
-		return path_cwd;
-	#endif
-
-	return str_format("%s/", dir);
-}
-
 sapp_desc sokol_main(int argc, char* argv[]) {
-	// Resolve the path the executable is in. This will be used as the base
-	// dir for assets and userdata if PATH_ASSETS or PATH_USERDATA is not set
-	// during compile time.
+	// Resolve the path for the executable. This will be used as the base dir 
+	// for assets and userdata if PATH_ASSETS or PATH_USERDATA is not set during
+	// compile time.
 	// FIXME: path_userdata should probably point to some place in the home 
 	// directory (similar to SDL_GetPrefPath() for SDL).
+	char *exe_path = platform_executable_path();
+	char *base_path = "";
+	if (exe_path) {
+		base_path = platform_dirname(exe_path);
+	}
+
 	#ifdef PATH_ASSETS
 		path_assets = TOSTRING(PATH_ASSETS);
 	#else
-		path_assets = platform_get_base_path();
+		path_assets = base_path;
 	#endif
 
 	#ifdef PATH_USERDATA
 		path_userdata = TOSTRING(PATH_USERDATA);
 	#else
-		path_userdata = platform_get_base_path();
+		path_userdata = base_path;
 	#endif
 
 	// Try to open a QOP package that may have been appended to the executable
 	// for a release build. All assets will be loaded from this archive then.
-	if (argc > 0 && qop_open(argv[0], &qop)) {
-		printf("Opened QOP archive from %s; %d bytes, %d files\n", argv[0], qop.files_offset, qop.index_len);
+	if (exe_path && qop_open(exe_path, &qop)) {
+		printf("Opened QOP archive from %s; %d bytes, %d files\n", exe_path, qop.files_offset, qop.index_len);
 		qop_read_index(&qop, bump_alloc(qop.hashmap_size));
 	}
 
