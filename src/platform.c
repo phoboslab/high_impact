@@ -37,7 +37,7 @@ char *platform_executable_path(void) {
 			return NULL;
 		}
 	#elif defined(__APPLE__)
-		if (NSGetExecutablePath(buffer, &buffer_len) != 0) {
+		if (_NSGetExecutablePath(buffer, &buffer_len) != 0) {
 			return NULL;
 		}
 	#elif defined(__linux__)
