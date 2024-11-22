@@ -89,4 +89,8 @@ void platform_set_audio_mix_cb(void (*cb)(float *buffer, uint32_t len));
 	rgba_t *platform_get_screenbuffer(int32_t *pitch);
 #endif
 
+#if defined(RENDER_METAL)
+	void *platform_get_metal_layer(void);
+#endif
+
 #endif

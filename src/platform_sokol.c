@@ -11,6 +11,8 @@
 	#else
 		#define SOKOL_GLCORE
 	#endif
+#elif defined(RENDER_METAL)
+	#define SOKOL_METAL
 #else
 	#error "Unsupported renderer for platform SOKOL"
 #endif
@@ -302,6 +304,12 @@ void platform_cleanup(void) {
 		qop_close(&qop);
 	}
 }
+
+#if defined(RENDER_METAL)
+void *platform_get_metal_layer(void) {
+	return (__bridge void *)_sapp.macos.view.layer;
+}
+#endif
 
 sapp_desc sokol_main(int argc, char* argv[]) {
 	// Resolve the path for the executable. This will be used as the base dir 
