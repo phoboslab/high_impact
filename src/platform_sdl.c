@@ -316,7 +316,7 @@ uint32_t platform_store_userdata(const char *name, void *bytes, int32_t len) {
 	void platform_video_init() {
 		metal_view = SDL_Metal_CreateView(window);
 		metal_layer = SDL_Metal_GetLayer(metal_view);
-		renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED);
+		renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
 	}
 
 	void platform_video_cleanup() {

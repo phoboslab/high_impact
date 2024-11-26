@@ -4,19 +4,9 @@
 #include "utils.h"
 #include "platform.h"
 
-#if !defined(RENDER_ATLAS_SIZE)
-	#define RENDER_ATLAS_SIZE 64
-#endif
-
-#if !defined(RENDER_ATLAS_GRID)
-	#define RENDER_ATLAS_GRID 32
-#endif
-
 #if !defined(RENDER_ATLAS_BORDER)
 	#define RENDER_ATLAS_BORDER 0
 #endif
-
-#define RENDER_ATLAS_SIZE_PX (RENDER_ATLAS_SIZE * RENDER_ATLAS_GRID)
 
 #if !defined(RENDER_BUFFER_CAPACITY)
 	#define RENDER_BUFFER_CAPACITY 2048
@@ -46,130 +36,156 @@
 // -----------------------------------------------------------------------------
 // Shaders
 
-static NSString *const shaderSource = @""
+// Since we might flush mid-frame (due to a blend state change or texture update,
+// we need to ensure that our instances are aligned to the minimum constant buffer
+// offset alignment of the device, so that we can bind our vertex buffer at the
+// granularity of a single instance. On MTLGPUFamilyMac2, this minimum alignment
+// is 32 bytes.
+#define RENDER_INSTANCE_ALIGNMENT 32
+
+static char *const shaderSource = ""
 "#include <metal_stdlib>\n"
 "using namespace metal;\n"
 "\n"
+"#if !defined(RENDER_TEXTURES_MAX)\n"
+"	#define RENDER_TEXTURES_MAX 1024\n"
+"#endif\n"
+"\n"
+"#if !defined(RENDER_INSTANCE_ALIGNMENT)\n"
+"	#define RENDER_INSTANCE_ALIGNMENT 32\n"
+"#endif\n"
+"\n"
+"struct __attribute__((aligned(RENDER_INSTANCE_ALIGNMENT))) QuadInstance {\n"
+"	float2 positions[4];\n"
+"	float2 uvs[4];\n"
+"	uint colors[4];\n"
+"	uint textureIndex;\n"
+"};\n"
+"\n"
+"struct VertexOut {\n"
+"	float4 pos [[position]];\n"
+"	float2 uv;\n"
+"	float4 color;\n"
+"	uint textureIndex [[flat]];\n"
+"};\n"
+"\n"
 "struct Uniforms {\n"
-"    float2 screen;\n"
-"    float2 fade;\n"
-"    float time;\n"
+"	float2 screen;\n"
+"	float2 fade;\n"
+"	float time;\n"
 "};\n"
 "\n"
-"struct Vin {\n"
-"    packed_float2 pos;\n"
-"    packed_float2 uv;\n"
-"    uint color;\n"
+"struct Arguments {\n"
+"	texture2d<float> textures[RENDER_TEXTURES_MAX];\n"
+"	sampler textureSampler;\n"
 "};\n"
 "\n"
-"struct Vout {\n"
-"    float4 pos [[position]];\n"
-"    float4 color;\n"
-"    float2 uv;\n"
-"};\n"
-"\n"
-"vertex Vout vertex_main(device Vin const* vertices [[buffer(0)]],\n"
-"                        constant Uniforms &u [[buffer(1)]],\n"
-"                        uint vertexID [[vertex_id]])\n"
+"vertex VertexOut vertex_main(device const QuadInstance *instances [[buffer(0)]],\n"
+"							 constant Uniforms &u                  [[buffer(1)]],\n"
+"							 uint instanceID                       [[instance_id]],\n"
+"							 uint vertexID                         [[vertex_id]])\n"
 "{\n"
-"    Vin in = vertices[vertexID];\n"
-"    Vout out {\n"
-"        .pos = float4(\n"
-"            floor(in.pos + 0.5f) * (float2(2.0f, -2.0f) / u.screen.xy) + float2(-1.0f, 1.0f), 0.0f, 1.0f\n"
-"        ),\n"
-"        .color = unpack_unorm4x8_to_float(in.color),\n"
-"        .uv = in.uv\n"
-"    };\n"
-"    out.pos.y *= -1.0f;\n"
-"    return out;\n"
+"	device const QuadInstance &quad = instances[instanceID];\n"
+"	float2 pos = quad.positions[vertexID];\n"
+"	float2 uv = quad.uvs[vertexID];\n"
+"	uint color = quad.colors[vertexID];\n"
+"\n"
+"	VertexOut out {\n"
+"		.pos = float4(floor(pos + 0.5f) * (float2(2.0f, -2.0f) / u.screen.xy) + float2(-1.0f, 1.0f), 0.0f, 1.0f),\n"
+"		.uv = uv,\n"
+"		.color = unpack_unorm4x8_to_float(color),\n"
+"		.textureIndex = quad.textureIndex,\n"
+"	};\n"
+"	out.pos.y *= -1.0f;\n"
+"	return out;\n"
 "}\n"
 "\n"
-"fragment float4 fragment_main(Vout in [[stage_in]],\n"
-"                              texture2d<float, access::sample> atlas [[texture(0)]],\n"
-"                              sampler atlasSampler [[sampler(0)]])\n"
+"fragment float4 fragment_main(VertexOut in [[stage_in]],\n"
+"							  constant Arguments &arguments [[buffer(0)]])\n"
 "{\n"
-"    float4 tex_color = atlas.sample(atlasSampler, in.uv);\n"
-"    float4 color = tex_color * in.color;\n"
-"    return color;\n"
+"	float4 tex_color = arguments.textures[in.textureIndex].sample(arguments.textureSampler, in.uv);\n"
+"	float4 color = tex_color * in.color;\n"
+"	return color;\n"
 "}\n"
 "\n"
-"struct VPout {\n"
-"    float4 pos [[position]];\n"
-"    float2 uv;\n"
-"};\n"
-"\n"
-"vertex VPout vertex_post(device Vin const* vertices [[buffer(0)]],\n"
-"                         constant Uniforms &u [[buffer(1)]],\n"
-"                         uint vertexID [[vertex_id]])\n"
+"vertex VertexOut vertex_post(device const QuadInstance *instances [[buffer(0)]],\n"
+"							  constant Uniforms &u           [[buffer(1)]],\n"
+"							  uint instanceID                [[instance_id]],\n"
+"							  uint vertexID                  [[vertex_id]])\n"
 "{\n"
-"    Vin in = vertices[vertexID];\n"
-"    VPout out {\n"
-"        .pos = float4(in.pos * (float2(2.0f, -2.0f) / u.screen.xy) + float2(-1.0f, 1.0f), 0.0f, 1.0f),\n"
-"        .uv = in.uv\n"
-"    };\n"
-"    out.pos.y *= -1.0f;\n"
-"    return out;\n"
+"	device const QuadInstance &quad = instances[instanceID];\n"
+"	float2 pos = quad.positions[vertexID];\n"
+"	float2 uv = quad.uvs[vertexID];\n"
+"\n"
+"	VertexOut out {\n"
+"		.pos = float4(pos * (float2(2.0f, -2.0f) / u.screen.xy) + float2(-1.0f, 1.0f), 0.0f, 1.0f),\n"
+"		.uv = uv,\n"
+"		.color = float4(1.0f),\n"
+"		.textureIndex = 0\n"
+"	};\n"
+"	out.pos.y *= -1.0f;\n"
+"	return out;\n"
 "}\n"
 "\n"
-"fragment float4 fragment_post_default(VPout in [[stage_in]],\n"
-"                                      texture2d<float, access::sample> screenbuffer [[texture(0)]],\n"
-"                                      sampler screenSampler [[sampler(0)]])\n"
+"fragment float4 fragment_post_default(VertexOut in [[stage_in]],\n"
+"									  constant Arguments &arguments [[buffer(0)]])\n"
 "{\n"
-"    return screenbuffer.sample(screenSampler, in.uv);\n"
+"	return arguments.textures[in.textureIndex].sample(arguments.textureSampler, in.uv);\n"
 "}\n"
 "\n"
 "// CRT effect based on https://www.shadertoy.com/view/Ms23DR\n"
 "// by https://github.com/mattiasgustavsson/\n"
 "\n"
 "static float2 curve(float2 uv) {\n"
-"    uv = (uv - 0.5f) * 2.0f;\n"
-"    uv *= 1.1f;\n"
-"    uv.x *= 1.0f + powr((abs(uv.y) / 5.0f), 2.0f);\n"
-"    uv.y *= 1.0f + powr((abs(uv.x) / 4.0f), 2.0f);\n"
-"    uv  = (uv / 2.0f) + 0.5f;\n"
-"    uv =  uv * 0.92f + 0.04f;\n"
-"    return uv;\n"
+"	uv = (uv - 0.5f) * 2.0f;\n"
+"	uv *= 1.1f;\n"
+"	uv.x *= 1.0f + powr((abs(uv.y) / 5.0f), 2.0f);\n"
+"	uv.y *= 1.0f + powr((abs(uv.x) / 4.0f), 2.0f);\n"
+"	uv  = (uv / 2.0f) + 0.5f;\n"
+"	uv =  uv * 0.92f + 0.04f;\n"
+"	return uv;\n"
 "}\n"
 "\n"
-"fragment float4 fragment_post_crt(VPout in [[stage_in]],\n"
-"                                  constant Uniforms &u [[buffer(1)]],\n"
-"                                  texture2d<float, access::sample> screenbuffer [[texture(0)]],\n"
-"                                  sampler screenSampler [[sampler(0)]])\n"
+"fragment float4 fragment_post_crt(VertexOut in                  [[stage_in]],\n"
+"								  constant Arguments &arguments [[buffer(0)]],\n"
+"								  constant Uniforms &u          [[buffer(1)]])\n"
 "{\n"
-"    float2 uv = curve(in.uv);\n"
-"    float3 color;\n"
-"    float x =\n"
-"        sin(0.3f * u.time + in.uv.y * 21.0f) * sin(0.7f * u.time + uv.y * 29.0f) *\n"
-"        sin(0.3f + 0.33f * u.time + uv.y * 31.0f) * 0.0017f;\n"
+"	auto screenbuffer = arguments.textures[in.textureIndex];\n"
+"	auto screenSampler = arguments.textureSampler;\n"
 "\n"
-"    color.r = screenbuffer.sample(screenSampler, float2(x + uv.x + 0.001f, uv.y + 0.001f)).x + 0.05f;\n"
-"    color.g = screenbuffer.sample(screenSampler, float2(x + uv.x + 0.000f, uv.y - 0.002f)).y + 0.05f;\n"
-"    color.b = screenbuffer.sample(screenSampler, float2(x + uv.x - 0.002f, uv.y + 0.000f)).z + 0.05f;\n"
-"    color.r += 0.08 * screenbuffer.sample(screenSampler, 0.75f * float2(x + 0.025f, -0.027f) + float2(uv.x + 0.001f, uv.y + 0.001f)).x;\n"
-"    color.g += 0.05 * screenbuffer.sample(screenSampler, 0.75f * float2(x - 0.022f, -0.020f) + float2(uv.x + 0.000f, uv.y - 0.002f)).y;\n"
-"    color.b += 0.08 * screenbuffer.sample(screenSampler, 0.75f * float2(x + -0.02f, -0.018f) + float2(uv.x - 0.002f, uv.y + 0.000f)).z;\n"
+"	float2 uv = curve(in.uv);\n"
+"	float3 color;\n"
+"	float x = sin(0.3f * u.time + in.uv.y * 21.0f) * sin(0.7f * u.time + uv.y * 29.0f) *\n"
+"	sin(0.3f + 0.33f * u.time + uv.y * 31.0f) * 0.0017f;\n"
 "\n"
-"    color = saturate(color * 0.6f + 0.4f * color * color * 1.0f);\n"
+"	color.r = screenbuffer.sample(screenSampler, float2(x + uv.x + 0.001f, uv.y + 0.001f)).x + 0.05f;\n"
+"	color.g = screenbuffer.sample(screenSampler, float2(x + uv.x + 0.000f, uv.y - 0.002f)).y + 0.05f;\n"
+"	color.b = screenbuffer.sample(screenSampler, float2(x + uv.x - 0.002f, uv.y + 0.000f)).z + 0.05f;\n"
+"	color.r += 0.08 * screenbuffer.sample(screenSampler, 0.75f * float2(x + 0.025f, -0.027f) + float2(uv.x + 0.001f, uv.y + 0.001f)).x;\n"
+"	color.g += 0.05 * screenbuffer.sample(screenSampler, 0.75f * float2(x - 0.022f, -0.020f) + float2(uv.x + 0.000f, uv.y - 0.002f)).y;\n"
+"	color.b += 0.08 * screenbuffer.sample(screenSampler, 0.75f * float2(x + -0.02f, -0.018f) + float2(uv.x - 0.002f, uv.y + 0.000f)).z;\n"
 "\n"
-"    float vignette = (0.0f + 1.0f * 16.0f * uv.x * uv.y * (1.0f - uv.x) * (1.0f - uv.y));\n"
-"    color *= float3(powr(vignette, 0.25f));\n"
-"    color *= float3(0.95f, 1.05f, 0.95f);\n"
-"    color *= 2.8;\n"
+"	color = saturate(color * 0.6f + 0.4f * color * color * 1.0f);\n"
 "\n"
-"    float scanlines = saturate(0.35f + 0.35f * sin(3.5f * u.time + uv.y * u.screen.y * 1.5f));\n"
-"    float s = powr(scanlines, 1.7f);\n"
-"    color = color * float3(0.4f + 0.7f * s);\n"
+"	float vignette = (0.0f + 1.0f * 16.0f * uv.x * uv.y * (1.0f - uv.x) * (1.0f - uv.y));\n"
+"	color *= float3(powr(vignette, 0.25f));\n"
+"	color *= float3(0.95f, 1.05f, 0.95f);\n"
+"	color *= 2.8;\n"
 "\n"
-"    color *= 1.0f + 0.01f * sin(110.0f * u.time);\n"
-"    if (uv.x < 0.0f || uv.x > 1.0f) {\n"
-"        color *= 0.0;\n"
-"    }\n"
-"    if (uv.y < 0.0f || uv.y > 1.0f) {\n"
-"        color *= 0.0;\n"
-"    }\n"
+"	float scanlines = saturate(0.35f + 0.35f * sin(3.5f * u.time + uv.y * u.screen.y * 1.5f));\n"
+"	float s = powr(scanlines, 1.7f);\n"
+"	color = color * float3(0.4f + 0.7f * s);\n"
 "\n"
-"    color *= 1.0f - 0.65f * float3(saturate((fmod(in.pos.x, 2.0f) - 1.0f) * 2.0f));\n"
-"    return float4(color, 1.0f);\n"
+"	color *= 1.0f + 0.01f * sin(110.0f * u.time);\n"
+"	if (uv.x < 0.0f || uv.x > 1.0f) {\n"
+"		color *= 0.0;\n"
+"	}\n"
+"	if (uv.y < 0.0f || uv.y > 1.0f) {\n"
+"		color *= 0.0;\n"
+"	}\n"
+"\n"
+"	color *= 1.0f - 0.65f * float3(saturate((fmod(in.pos.x, 2.0f) - 1.0f) * 2.0f));\n"
+"	return float4(color, 1.0f);\n"
 "}\n";
 
 typedef struct {
@@ -178,15 +194,28 @@ typedef struct {
 	float time;
 } shader_uniforms_t;
 
+typedef struct {
+	MTLResourceID textures[RENDER_TEXTURES_MAX];
+	MTLResourceID sampler;
+} shader_arguments_t;
+
+typedef struct __attribute__((aligned(RENDER_INSTANCE_ALIGNMENT))) {
+	simd_float2 positions[4];
+	simd_float2 uvs[4];
+	uint32_t colors[4];
+	uint32_t textureIndex;
+} quad_instance_t;
+
 // -----------------------------------------------------------------------------
 // Rendering
 
 typedef struct {
 	vec2i_t offset;
 	vec2i_t size;
-} atlas_pos_t;
+} texture_record_t;
 
 texture_t RENDER_NO_TEXTURE;
+static texture_t RENDER_BACKBUFFER_TEXTURE;
 
 // This should be kept in sync with the number of blend modes.
 #define RENDER_BLEND_COUNT (RENDER_BLEND_LIGHTER + 1)
@@ -199,11 +228,10 @@ typedef struct {
 	id<MTLLibrary> library;
 	id<MTLRenderPipelineState> mainRenderPipelines[RENDER_BLEND_COUNT];
 	id<MTLRenderPipelineState> postRenderPipelines[RENDER_POST_MAX];
-	id<MTLTexture> atlasTexture;
-	id<MTLTexture> backbufferTexture;
+	id<MTLTexture> textures[RENDER_TEXTURES_MAX];
 	id<MTLSamplerState> sampler;
-	id<MTLBuffer> vertexBuffer;
-	id<MTLBuffer> indexBuffer;
+	id<MTLBuffer> instanceBuffers[MAX_FRAMES_IN_FLIGHT];
+	id<MTLBuffer> argumentBuffer;
 	id<MTLCommandBuffer> currentCommandBuffer;
 	dispatch_semaphore_t frameSemaphore;
 } mtl_ctxt_t;
@@ -213,32 +241,87 @@ static mtl_ctxt_t mtl;
 static const MTLPixelFormat atlasFormat = MTLPixelFormatRGBA8Unorm;
 static const MTLPixelFormat renderbufferFormat = MTLPixelFormatBGRA8Unorm;
 
-static uint32_t atlasMap[RENDER_ATLAS_SIZE];
-static atlas_pos_t textures[RENDER_TEXTURES_MAX];
-static uint32_t textureCount = 0;
+static texture_record_t textureProperties[RENDER_TEXTURES_MAX];
 static const BOOL useMipmaps = RENDER_USE_MIPMAPS ? YES : NO;
-static BOOL regenerateMipmaps = NO;
 static vec2i_t screenSize;
 static vec2i_t backbufferSize;
+static BOOL reencodeArgumentBuffer = YES;
 static BOOL clearBackbuffer = NO;
-static quadverts_t quadBuffer[RENDER_BUFFER_CAPACITY];
-static uint32_t quadCount = 0;
+static size_t textureCount;
+static size_t frameIndex;
+static size_t maxInstanceCount;
+static size_t instanceCount;
+static size_t instanceBufferLength;
+static size_t instanceBufferReadOffset;
+static size_t instanceBufferWriteOffset;
 static render_blend_mode_t blendMode = RENDER_BLEND_NORMAL;
-static uint32_t postEffectIndex = 0;
-static const uint32_t vertexBufferLength = sizeof(quadverts_t) * RENDER_BUFFER_CAPACITY * MAX_FRAMES_IN_FLIGHT;
-static uint32_t vertexBufferOffset = 0;
+static size_t postEffectIndex = 0;
+
+static uint32_t alignup(uint32_t n, uint32_t alignment) {
+	return ((n + alignment - 1) / alignment) * alignment;
+}
+
+static void render_realloc_instance_storage(size_t newMaxInstanceCount) {
+	size_t alignedInstanceSize = alignup(sizeof(quad_instance_t), RENDER_INSTANCE_ALIGNMENT);
+	// When performing instancing, instance data must be packed (allowing for padding
+	// inside instance structs but not between them). Hence the aligned size actually
+	// has to be the size of the struct.
+	error_if(sizeof(quad_instance_t) != alignedInstanceSize,
+			 "Instance size must be exactly equal to aligned instance size");
+	if (newMaxInstanceCount > maxInstanceCount) {
+		size_t bufferLength = alignedInstanceSize * newMaxInstanceCount;
+		size_t currentBufferIndex = frameIndex % MAX_FRAMES_IN_FLIGHT;
+		id<MTLBuffer> inProgressBuffer = mtl.instanceBuffers[currentBufferIndex];
+		for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i) {
+			mtl.instanceBuffers[i] = [mtl.device newBufferWithLength:bufferLength
+															 options:MTLResourceStorageModeShared];
+		}
+		if (inProgressBuffer) {
+			// If we're mid-frame, we need to preserve buffer contents because there might be instances
+			// that have been copied but not yet encoded, within the range [instanceBufferReadOffset,
+			// instanceBufferWriteOffset).
+			memcpy([mtl.instanceBuffers[currentBufferIndex] contents],
+				   [inProgressBuffer contents],
+				   inProgressBuffer.length);
+		}
+		instanceBufferLength = bufferLength;
+		maxInstanceCount = newMaxInstanceCount;
+	}
+}
+
+static quad_instance_t *render_alloc_quads(size_t count) {
+	size_t alignedInstanceSize = alignup(sizeof(quad_instance_t), RENDER_INSTANCE_ALIGNMENT);
+	while (instanceBufferWriteOffset + alignedInstanceSize * count >= instanceBufferLength) {
+		render_realloc_instance_storage(maxInstanceCount * 2);
+	}
+	size_t bufferIndex = frameIndex % MAX_FRAMES_IN_FLIGHT;
+	id<MTLBuffer> currentInstanceBuffer = mtl.instanceBuffers[bufferIndex];
+	size_t instanceOffset = instanceBufferWriteOffset;
+	instanceBufferWriteOffset += alignedInstanceSize * count;
+	return (quad_instance_t *)([currentInstanceBuffer contents] + instanceOffset);
+}
 
 void render_backend_init(void) {
 	mtl.device = MTLCreateSystemDefaultDevice();
 	mtl.commandQueue = [mtl.device newCommandQueue];
 	mtl.currentCommandBuffer = nil;
 
+	BOOL supportsBindless = mtl.device.argumentBuffersSupport == MTLArgumentBuffersTier2;
+	error_if(!supportsBindless, "Metal renderer requires support for argument buffers tier 2");
+
 	CAMetalLayer *layer = (__bridge CAMetalLayer *)platform_get_metal_layer();
 	layer.device = mtl.device;
 	layer.pixelFormat = renderbufferFormat;
 
+	MTLCompileOptions *options = [MTLCompileOptions new];
+	options.preprocessorMacros = @{
+		@"RENDER_TEXTURES_MAX" : @(RENDER_TEXTURES_MAX),
+		@"RENDER_INSTANCE_ALIGNMENT" : @(RENDER_INSTANCE_ALIGNMENT)
+	};
 	NSError *error = nil;
-	mtl.library = [mtl.device newLibraryWithSource:shaderSource options:nil error:&error];
+	mtl.library = [mtl.device newLibraryWithSource:[NSString stringWithUTF8String:shaderSource]
+										   options:options
+											 error:&error];
 	error_if(error != nil, "Error occurred when creating library: %s",
 			 [error.localizedDescription cStringUsingEncoding:NSUTF8StringEncoding]);
 
@@ -287,14 +370,8 @@ void render_backend_init(void) {
 	error_if(error != nil, "Error occurred when creating render pipeline: %s",
 			 [error.localizedDescription cStringUsingEncoding:NSUTF8StringEncoding]);
 
-	uint32_t atlasWidth = RENDER_ATLAS_SIZE * RENDER_ATLAS_GRID;
-	uint32_t atlasHeight = RENDER_ATLAS_SIZE * RENDER_ATLAS_GRID;
-	MTLTextureDescriptor *atlasDescriptor = [MTLTextureDescriptor texture2DDescriptorWithPixelFormat:atlasFormat
-																							   width:atlasWidth
-																							  height:atlasHeight
-																						   mipmapped:useMipmaps];
-	atlasDescriptor.usage = MTLTextureUsageShaderRead;
-	mtl.atlasTexture = [mtl.device newTextureWithDescriptor:atlasDescriptor];
+	// Reserve texture slot for backbuffer
+	RENDER_BACKBUFFER_TEXTURE = (texture_t){ .index = textureCount++ };
 
 	MTLSamplerDescriptor *samplerDescriptor = [MTLSamplerDescriptor new];
 	samplerDescriptor.sAddressMode = MTLSamplerAddressModeClampToEdge;
@@ -302,23 +379,13 @@ void render_backend_init(void) {
 	samplerDescriptor.minFilter = MTLSamplerMinMagFilterLinear;
 	samplerDescriptor.magFilter = MTLSamplerMinMagFilterNearest;
 	samplerDescriptor.mipFilter = RENDER_USE_MIPMAPS ? MTLSamplerMipFilterLinear : MTLSamplerMipFilterNotMipmapped;
+	samplerDescriptor.supportArgumentBuffers = YES;
 	mtl.sampler = [mtl.device newSamplerStateWithDescriptor:samplerDescriptor];
 
-	mtl.vertexBuffer = [mtl.device newBufferWithLength:vertexBufferLength
-											   options:MTLResourceStorageModeShared];
+	render_realloc_instance_storage(RENDER_BUFFER_CAPACITY);
 
-	uint16_t indices[RENDER_BUFFER_CAPACITY][6];
-	for (uint32_t i = 0, j = 0; i < RENDER_BUFFER_CAPACITY; i++, j += 4) {
-		indices[i][0] = j + 3;
-		indices[i][1] = j + 1;
-		indices[i][2] = j + 0;
-		indices[i][3] = j + 3;
-		indices[i][4] = j + 2;
-		indices[i][5] = j + 1;
-	}
-	mtl.indexBuffer = [mtl.device newBufferWithBytes:&indices
-											  length:sizeof(uint16_t) * 6 * RENDER_BUFFER_CAPACITY
-											 options:MTLResourceStorageModeShared];
+	mtl.argumentBuffer = [mtl.device newBufferWithLength:sizeof(shader_arguments_t)
+												 options:MTLResourceStorageModeShared];
 
 	rgba_t white_pixels[4] = {rgba_white(), rgba_white(), rgba_white(), rgba_white()};
 	RENDER_NO_TEXTURE = texture_create(vec2i(2, 2), white_pixels);
@@ -327,11 +394,15 @@ void render_backend_init(void) {
 }
 
 void render_backend_cleanup(void) {
-	mtl.indexBuffer = nil;
-	mtl.vertexBuffer = nil;
 	mtl.sampler = nil;
-	mtl.backbufferTexture = nil;
-	mtl.atlasTexture = nil;
+	for (int i = 0; i < textureCount; ++i) {
+		mtl.textures[i] = nil;
+	}
+	textureCount = 0;
+	for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i) {
+		mtl.instanceBuffers[i] = nil;
+	}
+	mtl.argumentBuffer = nil;
 	for (int i = 0; i < RENDER_POST_MAX; ++i) {
 		mtl.postRenderPipelines[i] = nil;
 	}
@@ -343,19 +414,15 @@ void render_backend_cleanup(void) {
 	mtl.device = nil;
 }
 
-static uint32_t alignup(uint32_t n, uint32_t alignment) {
-	return ((n + alignment - 1) / alignment) * alignment;
-}
-
-static void render_flush(id<MTLRenderPipelineState> renderPipeline,
-						 id<MTLTexture> sourceTexture,
-						 id<MTLTexture> destinationTexture)
+static void render_flush(id<MTLRenderPipelineState> renderPipeline, id<MTLTexture> destinationTexture)
 {
-	if (regenerateMipmaps) {
-		id<MTLBlitCommandEncoder> mipmapEncoder = [mtl.currentCommandBuffer blitCommandEncoder];
-		[mipmapEncoder generateMipmapsForTexture:mtl.atlasTexture];
-		[mipmapEncoder endEncoding];
-		regenerateMipmaps = NO;
+	if (reencodeArgumentBuffer) {
+		shader_arguments_t *args = (shader_arguments_t *)[mtl.argumentBuffer contents];
+		for (int i = 0; i < textureCount; ++i) {
+			args->textures[i] = mtl.textures[i].gpuResourceID;
+		}
+		args->sampler = mtl.sampler.gpuResourceID;
+		reencodeArgumentBuffer = NO;
 	}
 
 	MTLRenderPassDescriptor *passDescriptor = [MTLRenderPassDescriptor new];
@@ -374,33 +441,28 @@ static void render_flush(id<MTLRenderPipelineState> renderPipeline,
 	[renderCommandEncoder setViewport:viewport];
 
 	[renderCommandEncoder setRenderPipelineState:renderPipeline];
-
-	if (vertexBufferOffset + sizeof(quadverts_t) * quadCount >= vertexBufferLength) {
-		vertexBufferOffset = 0;
-	}
-	memcpy([mtl.vertexBuffer contents] + vertexBufferOffset, quadBuffer, sizeof(quadverts_t) * quadCount);
-	[renderCommandEncoder setVertexBuffer:mtl.vertexBuffer offset:vertexBufferOffset atIndex:0];
-	vertexBufferOffset = alignup(vertexBufferOffset + sizeof(quadverts_t) * quadCount, 256);
+	[renderCommandEncoder useResources:mtl.textures count:textureCount usage:MTLResourceUsageRead];
 
 	shader_uniforms_t uniforms = {
 		simd_make_float2(screenSize.x, screenSize.y),
 		simd_make_float2(0.0f, 0.0f),
 		engine.time
 	};
+	size_t bufferIndex = frameIndex % MAX_FRAMES_IN_FLIGHT;
+	[renderCommandEncoder setVertexBuffer:mtl.instanceBuffers[bufferIndex] offset:instanceBufferReadOffset atIndex:0];
 	[renderCommandEncoder setVertexBytes:&uniforms length:sizeof(shader_uniforms_t) atIndex:1];
+	[renderCommandEncoder setFragmentBuffer:mtl.argumentBuffer offset:0 atIndex:0];
 	[renderCommandEncoder setFragmentBytes:&uniforms length:sizeof(shader_uniforms_t) atIndex:1];
 
-	[renderCommandEncoder setFragmentTexture:sourceTexture atIndex:0];
-	[renderCommandEncoder setFragmentSamplerState:mtl.sampler atIndex:0];
-
-	if (quadCount != 0) {
-		[renderCommandEncoder drawIndexedPrimitives:MTLPrimitiveTypeTriangle
-										 indexCount:quadCount * 6
-										  indexType:MTLIndexTypeUInt16
-										indexBuffer:mtl.indexBuffer
-								  indexBufferOffset:0];
+	if (instanceCount != 0) {
+		[renderCommandEncoder drawPrimitives:MTLPrimitiveTypeTriangleStrip
+								 vertexStart:0
+								 vertexCount:4
+							   instanceCount:instanceCount
+								baseInstance:0];
+		instanceBufferReadOffset = instanceBufferWriteOffset;
+		instanceCount = 0;
 	}
-	quadCount = 0;
 
 	[renderCommandEncoder endEncoding];
 }
@@ -416,14 +478,20 @@ void render_set_screen(vec2i_t size) {
 	descriptor.storageMode = MTLStorageModePrivate;
 	descriptor.usage = MTLTextureUsageRenderTarget | MTLTextureUsageShaderRead;
 
-	mtl.backbufferTexture = [mtl.device newTextureWithDescriptor:descriptor];
+	id<MTLTexture> backbufferTexture = [mtl.device newTextureWithDescriptor:descriptor];
+	mtl.textures[RENDER_BACKBUFFER_TEXTURE.index] = backbufferTexture;
+	texture_record_t *t = &textureProperties[RENDER_BACKBUFFER_TEXTURE.index];
+	t->offset = vec2i(0, 0);
+	t->size = backbufferSize;
+
+	reencodeArgumentBuffer = YES;
 }
 
 void render_set_blend_mode(render_blend_mode_t mode) {
 	if (mode == blendMode) {
 		return;
 	}
-	render_flush(mtl.mainRenderPipelines[blendMode], mtl.atlasTexture, mtl.backbufferTexture);
+	render_flush(mtl.mainRenderPipelines[blendMode], mtl.textures[RENDER_BACKBUFFER_TEXTURE.index]);
 
 	blendMode = mode;
 }
@@ -435,33 +503,35 @@ void render_set_post_effect(render_post_effect_t post) {
 
 void render_frame_prepare(void) {
 	@autoreleasepool {
-		dispatch_semaphore_wait(mtl.frameSemaphore, DISPATCH_TIME_NOW);
+		dispatch_semaphore_wait(mtl.frameSemaphore, 1 * NSEC_PER_SEC);
 		mtl.currentCommandBuffer = [mtl.commandQueue commandBuffer];
 		clearBackbuffer = YES;
+		instanceBufferReadOffset = 0;
+		instanceBufferWriteOffset = 0;
 	}
 }
 
 void render_frame_end(void) {
 	@autoreleasepool {
 		// Main Pass
-		render_flush(mtl.mainRenderPipelines[blendMode], mtl.atlasTexture, mtl.backbufferTexture);
+		render_flush(mtl.mainRenderPipelines[blendMode], mtl.textures[RENDER_BACKBUFFER_TEXTURE.index]);
 
 		// Post Pass and Present
 		CAMetalLayer *layer = (__bridge CAMetalLayer *)platform_get_metal_layer();
 		id<CAMetalDrawable> drawable = [layer nextDrawable];
 		if (drawable) {
-			quadBuffer[quadCount] = (quadverts_t){
-				.vertices = {
-					{.pos = {0,            0           }, .uv = {0, 0}, .color = rgba_white()},
-					{.pos = {screenSize.x, 0           }, .uv = {1, 0}, .color = rgba_white()},
-					{.pos = {screenSize.x, screenSize.y}, .uv = {1, 1}, .color = rgba_white()},
-					{.pos = {0,            screenSize.y}, .uv = {0, 1}, .color = rgba_white()},
-				}
+			quad_instance_t *instance = render_alloc_quads(1);
+			quad_instance_t quad = {
+				.positions = {{0, 0}, {0, screenSize.y}, {screenSize.x, 0}, {screenSize.x, screenSize.y}},
+				.uvs = {{0, 0},{0, 1}, {1, 0}, {1, 1}},
+				.colors = {rgba_white().v, rgba_white().v, rgba_white().v, rgba_white().v},
+				.textureIndex = RENDER_BACKBUFFER_TEXTURE.index
 			};
-			++quadCount;
+			memcpy(instance, &quad, sizeof(quad_instance_t));
+			++instanceCount;
 
 			clearBackbuffer = YES;
-			render_flush(mtl.postRenderPipelines[postEffectIndex], mtl.backbufferTexture, drawable.texture);
+			render_flush(mtl.postRenderPipelines[postEffectIndex], drawable.texture);
 
 			[mtl.currentCommandBuffer presentDrawable:drawable];
 		}
@@ -473,24 +543,23 @@ void render_frame_end(void) {
 		[mtl.currentCommandBuffer commit];
 		mtl.currentCommandBuffer = nil;
 	}
+	++frameIndex;
 }
 
 void render_draw_quad(quadverts_t *quad, texture_t texture_handle) {
 	error_if(texture_handle.index >= textureCount, "Invalid texture %d", texture_handle.index);
-	atlas_pos_t *t = &textures[texture_handle.index];
+	texture_record_t *t = &textureProperties[texture_handle.index];
 
-	if (quadCount >= RENDER_BUFFER_CAPACITY) {
-		render_flush(mtl.mainRenderPipelines[blendMode], mtl.atlasTexture, mtl.backbufferTexture);
-	}
-
-	quadBuffer[quadCount] = *quad;
+	quad_instance_t *instance = render_alloc_quads(1);
+	int reorder[] = { 1, 0, 2, 3 }; // Swaps vertices so they can be drawn as triangle strips
 	for (uint32_t i = 0; i < 4; i++) {
-		quadBuffer[quadCount].vertices[i].uv.x =
-		(quadBuffer[quadCount].vertices[i].uv.x + t->offset.x) * (1.0 / RENDER_ATLAS_SIZE_PX);
-		quadBuffer[quadCount].vertices[i].uv.y =
-		(quadBuffer[quadCount].vertices[i].uv.y + t->offset.y) * (1.0 / RENDER_ATLAS_SIZE_PX);
+		instance->positions[reorder[i]] = (simd_float2){quad->vertices[i].pos.x, quad->vertices[i].pos.y};
+		instance->uvs[reorder[i]].x = (quad->vertices[i].uv.x + t->offset.x) * (1.0 / (t->size.x + 2 * RENDER_ATLAS_BORDER));
+		instance->uvs[reorder[i]].y = (quad->vertices[i].uv.y + t->offset.y) * (1.0 / (t->size.y + 2 * RENDER_ATLAS_BORDER));
+		instance->colors[reorder[i]] = quad->vertices[i].color.v;
 	}
-	++quadCount;
+	instance->textureIndex = texture_handle.index;
+	++instanceCount;
 }
 
 // -----------------------------------------------------------------------------
@@ -502,31 +571,28 @@ texture_mark_t textures_mark(void) {
 
 void textures_reset(texture_mark_t mark) {
 	error_if(mark.index > textureCount, "Invalid texture reset mark %d >= %d", mark.index, textureCount);
+	error_if(mark.index < 2, "Invalid texture reset mark %d < %d", mark.index, 2);
 	if (mark.index == textureCount) {
 		return;
 	}
 
-	render_flush(mtl.mainRenderPipelines[blendMode], mtl.atlasTexture, mtl.backbufferTexture);
+	render_flush(mtl.mainRenderPipelines[blendMode], mtl.textures[RENDER_BACKBUFFER_TEXTURE.index]);
 
-	textureCount = mark.index;
-	clear(atlasMap);
-
-	// Clear completely and recreate the default white texture
-	if (textureCount == 0) {
-		rgba_t white_pixels[4] = {rgba_white(), rgba_white(), rgba_white(), rgba_white()};
-		RENDER_NO_TEXTURE = texture_create(vec2i(2, 2), white_pixels);
-		return;
+	for (int i = mark.index; i < textureCount; ++i) {
+		mtl.textures[i] = nil;
 	}
+	textureCount = mark.index;
 
-	// Replay all texture grid insertions up to the reset len
-	for (int i = 0; i < textureCount; i++) {
-		uint32_t grid_x = (textures[i].offset.x - RENDER_ATLAS_BORDER) / RENDER_ATLAS_GRID;
-		uint32_t grid_y = (textures[i].offset.y - RENDER_ATLAS_BORDER) / RENDER_ATLAS_GRID;
-		uint32_t grid_width = (textures[i].size.x + RENDER_ATLAS_BORDER * 2 + RENDER_ATLAS_GRID - 1) / RENDER_ATLAS_GRID;
-		uint32_t grid_height = (textures[i].size.y + RENDER_ATLAS_BORDER * 2 + RENDER_ATLAS_GRID - 1) / RENDER_ATLAS_GRID;
-		for (uint32_t cx = grid_x; cx < grid_x + grid_width; cx++) {
-			atlasMap[cx] = grid_y + grid_height;
-		}
+	reencodeArgumentBuffer = YES;
+}
+
+static void texture_generate_mipmaps(id<MTLTexture> texture) {
+	if (useMipmaps) {
+		id<MTLCommandBuffer> commandBuffer = [mtl.commandQueue commandBuffer];
+		id<MTLBlitCommandEncoder> mipmapEncoder = [commandBuffer blitCommandEncoder];
+		[mipmapEncoder generateMipmapsForTexture:texture];
+		[mipmapEncoder endEncoding];
+		[commandBuffer commit];
 	}
 }
 
@@ -536,46 +602,15 @@ texture_t texture_create(vec2i_t size, rgba_t *pixels) {
 	uint32_t bw = size.x + RENDER_ATLAS_BORDER * 2;
 	uint32_t bh = size.y + RENDER_ATLAS_BORDER * 2;
 
-	// Find a position in the atlas for this texture (with added border)
-	uint32_t grid_width = (bw + RENDER_ATLAS_GRID - 1) / RENDER_ATLAS_GRID;
-	uint32_t grid_height = (bh + RENDER_ATLAS_GRID - 1) / RENDER_ATLAS_GRID;
-	uint32_t grid_x = 0;
-	uint32_t grid_y = RENDER_ATLAS_SIZE - grid_height + 1;
-
-	error_if(grid_width > RENDER_ATLAS_SIZE || grid_height > RENDER_ATLAS_SIZE, "Texture of size %dx%d doesn't fit in atlas", size.x, size.y);
-
-	for (uint32_t cx = 0; cx < RENDER_ATLAS_SIZE - grid_width; cx++) {
-		if (atlasMap[cx] >= grid_y) {
-			continue;
-		}
-
-		uint32_t cy = atlasMap[cx];
-		bool is_best = true;
-
-		for (uint32_t bx = cx; bx < cx + grid_width; bx++) {
-			if (atlasMap[bx] >= grid_y) {
-				is_best = false;
-				cx = bx;
-				break;
-			}
-			if (atlasMap[bx] > cy) {
-				cy = atlasMap[bx];
-			}
-		}
-		if (is_best) {
-			grid_y = cy;
-			grid_x = cx;
-		}
+	MTLTextureDescriptor *descriptor = [MTLTextureDescriptor texture2DDescriptorWithPixelFormat:atlasFormat
+																						  width:bw
+																						 height:bh
+																					  mipmapped:useMipmaps];
+	descriptor.usage = MTLTextureUsageShaderRead;
+	if (mtl.device.hasUnifiedMemory) {
+		descriptor.storageMode = MTLResourceStorageModeShared;
 	}
-
-	error_if(grid_y + grid_height > RENDER_ATLAS_SIZE, "Render atlas ran out of space for %dx%d texture", size.x, size.y);
-
-	for (uint32_t cx = grid_x; cx < grid_x + grid_width; cx++) {
-		atlasMap[cx] = grid_y + grid_height;
-	}
-
-	uint32_t x = grid_x * RENDER_ATLAS_GRID;
-	uint32_t y = grid_y * RENDER_ATLAS_GRID;
+	id<MTLTexture> texture = [mtl.device newTextureWithDescriptor:descriptor];
 
 	// Add the border pixels for this texture
 #if RENDER_ATLAS_BORDER > 0
@@ -612,22 +647,26 @@ texture_t texture_create(vec2i_t size, rgba_t *pixels) {
 		}
 	}
 
-	[mtl.atlasTexture replaceRegion:MTLRegionMake2D(x, y, bw, bh)
-						mipmapLevel:0
-						  withBytes:pixels
-						bytesPerRow:bw * 4];
+	[texture replaceRegion:MTLRegionMake2D(0, 0, bw, bh)
+			   mipmapLevel:0
+				 withBytes:pb
+			   bytesPerRow:bw * 4];
 	temp_free(pb);
 #else
-	[mtl.atlasTexture replaceRegion:MTLRegionMake2D(x, y, bw, bh)
-						mipmapLevel:0
-						  withBytes:pixels
-						bytesPerRow:bw * 4];
+	[texture replaceRegion:MTLRegionMake2D(0, 0, bw, bh)
+			   mipmapLevel:0
+				 withBytes:pixels
+			   bytesPerRow:bw * 4];
 #endif
 
-	regenerateMipmaps = useMipmaps;
 	texture_t texture_handle = {.index = textureCount};
-	textureCount++;
-	textures[texture_handle.index] = (atlas_pos_t){.offset = {x + RENDER_ATLAS_BORDER, y + RENDER_ATLAS_BORDER}, .size = size};
+	textureProperties[texture_handle.index] = (texture_record_t){.offset = { RENDER_ATLAS_BORDER, RENDER_ATLAS_BORDER }, .size = size};
+	mtl.textures[textureCount] = texture;
+	++textureCount;
+
+	texture_generate_mipmaps(texture);
+
+	reencodeArgumentBuffer = YES;
 
 	return texture_handle;
 }
@@ -635,12 +674,14 @@ texture_t texture_create(vec2i_t size, rgba_t *pixels) {
 void texture_replace_pixels(texture_t texture_handle, vec2i_t size, rgba_t *pixels) {
 	error_if(texture_handle.index >= textureCount, "Invalid texture %d", texture_handle.index);
 
-	atlas_pos_t *t = &textures[texture_handle.index];
+	texture_record_t *t = &textureProperties[texture_handle.index];
+	id<MTLTexture> texture = mtl.textures[texture_handle.index];
 	error_if(t->size.x < size.x || t->size.y < size.y, "Cannot replace %dx%d pixels of %dx%d texture", size.x, size.y, t->size.x, t->size.y);
 
-	[mtl.atlasTexture replaceRegion:MTLRegionMake2D(t->offset.x, t->offset.y, size.x, size.y)
-						mipmapLevel:0
-						  withBytes:pixels
-						bytesPerRow:size.x * 4];
-	regenerateMipmaps = useMipmaps;
+	[texture replaceRegion:MTLRegionMake2D(t->offset.x, t->offset.y, size.x, size.y)
+			   mipmapLevel:0
+				 withBytes:pixels
+			   bytesPerRow:size.x * 4];
+
+	texture_generate_mipmaps(texture);
 }
