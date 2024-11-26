@@ -7,6 +7,8 @@
 	#include "render_gl.c"
 #elif defined(RENDER_SOFTWARE)
 	#include "render_software.c"
+#elif defined(RENDER_METAL)
+	#include "render_metal.m"
 #else
 	#error "No renderer specified. #define RENDER_GL or RENDER_SOFTWARE"
 #endif
