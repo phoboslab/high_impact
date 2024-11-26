@@ -4,10 +4,6 @@
 #include "utils.h"
 #include "platform.h"
 
-#if !defined(RENDER_ATLAS_BORDER)
-	#define RENDER_ATLAS_BORDER 0
-#endif
-
 #if !defined(RENDER_BUFFER_CAPACITY)
 	#define RENDER_BUFFER_CAPACITY 2048
 #endif
@@ -209,11 +205,6 @@ typedef struct __attribute__((aligned(RENDER_INSTANCE_ALIGNMENT))) {
 // -----------------------------------------------------------------------------
 // Rendering
 
-typedef struct {
-	vec2i_t offset;
-	vec2i_t size;
-} texture_record_t;
-
 texture_t RENDER_NO_TEXTURE;
 static texture_t RENDER_BACKBUFFER_TEXTURE;
 
@@ -241,7 +232,6 @@ static mtl_ctxt_t mtl;
 static const MTLPixelFormat atlasFormat = MTLPixelFormatRGBA8Unorm;
 static const MTLPixelFormat renderbufferFormat = MTLPixelFormatBGRA8Unorm;
 
-static texture_record_t textureProperties[RENDER_TEXTURES_MAX];
 static const BOOL useMipmaps = RENDER_USE_MIPMAPS ? YES : NO;
 static vec2i_t screenSize;
 static vec2i_t backbufferSize;
@@ -470,20 +460,14 @@ static void render_flush(id<MTLRenderPipelineState> renderPipeline, id<MTLTextur
 void render_set_screen(vec2i_t size) {
 	screenSize = size;
 	backbufferSize = size;
-
 	MTLTextureDescriptor *descriptor = [MTLTextureDescriptor texture2DDescriptorWithPixelFormat:renderbufferFormat
 																						  width:backbufferSize.x
 																						 height:backbufferSize.y
 																					  mipmapped:NO];
 	descriptor.storageMode = MTLStorageModePrivate;
 	descriptor.usage = MTLTextureUsageRenderTarget | MTLTextureUsageShaderRead;
-
 	id<MTLTexture> backbufferTexture = [mtl.device newTextureWithDescriptor:descriptor];
 	mtl.textures[RENDER_BACKBUFFER_TEXTURE.index] = backbufferTexture;
-	texture_record_t *t = &textureProperties[RENDER_BACKBUFFER_TEXTURE.index];
-	t->offset = vec2i(0, 0);
-	t->size = backbufferSize;
-
 	reencodeArgumentBuffer = YES;
 }
 
@@ -492,7 +476,6 @@ void render_set_blend_mode(render_blend_mode_t mode) {
 		return;
 	}
 	render_flush(mtl.mainRenderPipelines[blendMode], mtl.textures[RENDER_BACKBUFFER_TEXTURE.index]);
-
 	blendMode = mode;
 }
 
@@ -548,14 +531,13 @@ void render_frame_end(void) {
 
 void render_draw_quad(quadverts_t *quad, texture_t texture_handle) {
 	error_if(texture_handle.index >= textureCount, "Invalid texture %d", texture_handle.index);
-	texture_record_t *t = &textureProperties[texture_handle.index];
-
+	id<MTLTexture> texture = mtl.textures[texture_handle.index];
 	quad_instance_t *instance = render_alloc_quads(1);
 	int reorder[] = { 1, 0, 2, 3 }; // Swaps vertices so they can be drawn as triangle strips
 	for (uint32_t i = 0; i < 4; i++) {
 		instance->positions[reorder[i]] = (simd_float2){quad->vertices[i].pos.x, quad->vertices[i].pos.y};
-		instance->uvs[reorder[i]].x = (quad->vertices[i].uv.x + t->offset.x) * (1.0 / (t->size.x + 2 * RENDER_ATLAS_BORDER));
-		instance->uvs[reorder[i]].y = (quad->vertices[i].uv.y + t->offset.y) * (1.0 / (t->size.y + 2 * RENDER_ATLAS_BORDER));
+		instance->uvs[reorder[i]].x = quad->vertices[i].uv.x / texture.width;
+		instance->uvs[reorder[i]].y = quad->vertices[i].uv.y / texture.height;
 		instance->colors[reorder[i]] = quad->vertices[i].color.v;
 	}
 	instance->textureIndex = texture_handle.index;
@@ -575,9 +557,7 @@ void textures_reset(texture_mark_t mark) {
 	if (mark.index == textureCount) {
 		return;
 	}
-
 	render_flush(mtl.mainRenderPipelines[blendMode], mtl.textures[RENDER_BACKBUFFER_TEXTURE.index]);
-
 	for (int i = mark.index; i < textureCount; ++i) {
 		mtl.textures[i] = nil;
 	}
@@ -598,90 +578,29 @@ static void texture_generate_mipmaps(id<MTLTexture> texture) {
 
 texture_t texture_create(vec2i_t size, rgba_t *pixels) {
 	error_if(textureCount >= RENDER_TEXTURES_MAX, "RENDER_TEXTURES_MAX reached");
-
-	uint32_t bw = size.x + RENDER_ATLAS_BORDER * 2;
-	uint32_t bh = size.y + RENDER_ATLAS_BORDER * 2;
-
 	MTLTextureDescriptor *descriptor = [MTLTextureDescriptor texture2DDescriptorWithPixelFormat:atlasFormat
-																						  width:bw
-																						 height:bh
+																						  width:size.x
+																						 height:size.y
 																					  mipmapped:useMipmaps];
 	descriptor.usage = MTLTextureUsageShaderRead;
 	if (mtl.device.hasUnifiedMemory) {
 		descriptor.storageMode = MTLResourceStorageModeShared;
 	}
 	id<MTLTexture> texture = [mtl.device newTextureWithDescriptor:descriptor];
-
-	// Add the border pixels for this texture
-#if RENDER_ATLAS_BORDER > 0
-	rgba_t *pb = temp_alloc(sizeof(rgba_t) * bw * bh);
-
-	if (size.x && size.y) {
-		// Top border
-		for (int32_t y = 0; y < RENDER_ATLAS_BORDER; y++) {
-			memcpy(pb + bw * y + RENDER_ATLAS_BORDER, pixels, size.x * sizeof(rgba_t));
-		}
-
-		// Bottom border
-		for (int32_t y = 0; y < RENDER_ATLAS_BORDER; y++) {
-			memcpy(pb + bw * (bh - RENDER_ATLAS_BORDER + y) + RENDER_ATLAS_BORDER, pixels + size.x * (size.y-1), size.x * sizeof(rgba_t));
-		}
-
-		// Left border
-		for (int32_t y = 0; y < bh; y++) {
-			for (int32_t x = 0; x < RENDER_ATLAS_BORDER; x++) {
-				pb[y * bw + x] = pixels[clamp(y-RENDER_ATLAS_BORDER, 0, size.y-1) * size.x];
-			}
-		}
-
-		// Right border
-		for (int32_t y = 0; y < bh; y++) {
-			for (int32_t x = 0; x < RENDER_ATLAS_BORDER; x++) {
-				pb[y * bw + x + bw - RENDER_ATLAS_BORDER] = pixels[size.x - 1 + clamp(y-RENDER_ATLAS_BORDER, 0, size.y-1) * size.x];
-			}
-		}
-
-		// Texture
-		for (int32_t y = 0; y < size.y; y++) {
-			memcpy(pb + bw * (y + RENDER_ATLAS_BORDER) + RENDER_ATLAS_BORDER, pixels + size.x * y, size.x * sizeof(rgba_t));
-		}
-	}
-
-	[texture replaceRegion:MTLRegionMake2D(0, 0, bw, bh)
-			   mipmapLevel:0
-				 withBytes:pb
-			   bytesPerRow:bw * 4];
-	temp_free(pb);
-#else
-	[texture replaceRegion:MTLRegionMake2D(0, 0, bw, bh)
-			   mipmapLevel:0
-				 withBytes:pixels
-			   bytesPerRow:bw * 4];
-#endif
-
+	[texture replaceRegion:MTLRegionMake2D(0, 0, size.x, size.y) mipmapLevel:0 withBytes:pixels bytesPerRow:size.x * 4];
 	texture_t texture_handle = {.index = textureCount};
-	textureProperties[texture_handle.index] = (texture_record_t){.offset = { RENDER_ATLAS_BORDER, RENDER_ATLAS_BORDER }, .size = size};
 	mtl.textures[textureCount] = texture;
 	++textureCount;
-
 	texture_generate_mipmaps(texture);
-
 	reencodeArgumentBuffer = YES;
-
 	return texture_handle;
 }
 
 void texture_replace_pixels(texture_t texture_handle, vec2i_t size, rgba_t *pixels) {
 	error_if(texture_handle.index >= textureCount, "Invalid texture %d", texture_handle.index);
-
-	texture_record_t *t = &textureProperties[texture_handle.index];
 	id<MTLTexture> texture = mtl.textures[texture_handle.index];
-	error_if(t->size.x < size.x || t->size.y < size.y, "Cannot replace %dx%d pixels of %dx%d texture", size.x, size.y, t->size.x, t->size.y);
-
-	[texture replaceRegion:MTLRegionMake2D(t->offset.x, t->offset.y, size.x, size.y)
-			   mipmapLevel:0
-				 withBytes:pixels
-			   bytesPerRow:size.x * 4];
-
+	error_if(texture.width < size.x || texture.height < size.y,
+			 "Cannot replace %dx%d pixels of %dx%d texture", size.x, size.y, texture.width, texture.height);
+	[texture replaceRegion:MTLRegionMake2D(0, 0, size.x, size.y) mipmapLevel:0 withBytes:pixels bytesPerRow:size.x * 4];
 	texture_generate_mipmaps(texture);
 }
