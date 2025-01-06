@@ -18,14 +18,14 @@ typedef struct {
 	// a hit, length will be 1.
 	float length;
 
-	// The resulting position of the top left corne of the AABB that was traced
+	// The resulting position of the top left corner of the AABB that was traced
 	vec2_t pos;
 
 	// The normal vector of the surface that was hit
 	vec2_t normal;
 } trace_t;
 
-// Trace map with the AABB's top left corner, the movement vecotr and size
+// Trace map with the AABB's top left corner, the movement vector and size
 trace_t trace(map_t *map, vec2_t from, vec2_t vel, vec2_t size);
 
 #endif

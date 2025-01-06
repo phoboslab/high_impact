@@ -10,7 +10,7 @@
 
 typedef struct noise_t noise_t;
 
-// Bump allcoate and create a noise generator with a size of 1 << size_bits
+// Bump allocate and create a noise generator with a size of 1 << size_bits
 noise_t *noise(uint8_t size_bits);
 
 // Get the noise value in the range of -1..1

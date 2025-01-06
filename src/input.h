@@ -202,7 +202,7 @@ float input_state(uint8_t action);
 // Whether a button for that action was just pressed down before this frame
 bool input_pressed(uint8_t action);
 
-// Wheter a button for that action was just released bofere this frame
+// Whether a button for that action was just released before this frame
 bool input_released(uint8_t action);
 
 // The current mouse position in real pixels

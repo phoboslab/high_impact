@@ -29,7 +29,7 @@
 // functions.
 typedef struct {
 	// Called once when the scene is set. Use it to load resources and 
-	// instaiate your initial entities
+	// instantiate your initial entities
 	void (*init)(void);
 
 	// Called once per frame. Uss this to update logic specific to your game.

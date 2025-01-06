@@ -38,7 +38,7 @@ void *bump_from_temp(void *temp, uint32_t offset, uint32_t size) {
 }
 
 void *temp_alloc(uint32_t size) {
-	size = ((size + 7) >> 3) << 3; // allign to 8 bytes
+	size = ((size + 7) >> 3) << 3; // align to 8 bytes
 
 	error_if(bump_len + temp_len + size >= ALLOC_SIZE, "Failed to allocate %d bytes in temp mem", size);
 	error_if(temp_objects_len >= ALLOC_TEMP_OBJECTS_MAX, "ALLOC_TEMP_OBJECTS_MAX reached");

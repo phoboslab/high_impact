@@ -194,7 +194,7 @@ static void resolve_full_tile(map_t *map, vec2_t pos, vec2_t vel, vec2_t size, v
 	float length = 1;
 
 	// If we don't move in Y direction, or we do move in X and the the tile 
-	// corners's cross product with the movement vector has the correct sign, 
+	// corner's cross product with the movement vector has the correct sign, 
 	// this is a horizontal collision, otherwise it's vertical.
 	// float sign = vec2_cross(vel, vec2_sub(rp, pos)) * vel.x * vel.y;
 	float sign = (vel.x * (rp.y - pos.y) - vel.y * (rp.x - pos.x)) * vel.x * vel.y;

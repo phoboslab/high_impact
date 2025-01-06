@@ -30,7 +30,7 @@ typedef struct {
 	// Whether the map repeats indefinitely when drawing
 	bool repeat;
 
-	// Whether to draw this map in fround of all entities
+	// Whether to draw this map in front of all entities
 	bool foreground;
 
 	// The tileset image to use when drawing. Might be NULL for collision maps
@@ -49,7 +49,7 @@ typedef struct {
 
 // Create a map with the given data. If data is not NULL, it must be least 
 // size.x * size.y elements long. The data is _not_ copied. If data is NULL,
-// an array of sufficent length will be allocated.
+// an array of sufficient length will be allocated.
 map_t *map_with_data(uint16_t tile_size, vec2i_t size, uint16_t *data);
 
 // Load a map from a json_t. The json_t must have the following layout.

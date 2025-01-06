@@ -113,7 +113,7 @@ void render_translate(vec2_t translate);
 // Scale; can only be called if stack was pushed at least once
 void render_scale(vec2_t scale);
 
-// Rortate; can only be called if stack was pushed at least once
+// Rotate; can only be called if stack was pushed at least once
 void render_rotate(float rotation);
 
 // Returns a logical position, snapped to real screen pixels

@@ -37,7 +37,7 @@ void sound_init_synth(void);
 sound_mark_t sound_mark(void);
 void sound_reset(sound_mark_t mark);
 
-// Put all playing nodes in a halt state; usefull for e.g. a pause screen
+// Put all playing nodes in a halt state; useful for e.g. a pause screen
 void sound_halt(void);
 
 // Resume playing all halted sounds
@@ -52,7 +52,7 @@ void sound_set_global_volume(float volume);
 // Periodically called by the platform to mix playing nodes into output buffer
 void sound_mix_stereo(float *dest_samples, uint32_t dest_len);
 
-// Load a sound sorce from a QOA file. Calling this function multiple times with
+// Load a sound source from a QOA file. Calling this function multiple times with
 // the same path will return the same, cached sound source,
 sound_source_t *sound_source(char *path);
 
@@ -60,7 +60,7 @@ sound_source_t *sound_source(char *path);
 // taken; they are not copied.
 sound_source_t *sound_source_with_samples(int16_t *samples, uint32_t len, uint32_t channels, uint32_t samplerate);
 
-// Create a sound soure with the given pl_synth_sound_t defintion
+// Create a sound source with the given pl_synth_sound_t definition
 sound_source_t *sound_source_synth_sound(pl_synth_sound_t *sound);
 
 // Create a sound source with the given pl_synth_song_t definition

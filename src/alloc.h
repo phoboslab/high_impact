@@ -2,7 +2,7 @@
 #define HI_ALLOC_H
 
 // We statically reserve a single "hunk" of memory at program start. Memory
-// (for our own allocators) can not ever outgrow this hunk. Theres two ways to
+// (for our own allocators) can not ever outgrow this hunk. There's two ways to
 // allocate bytes from this hunk:
 
 //   1. A bump allocator that just grows linearly and may be reset to a previous 
@@ -23,7 +23,7 @@
 
 //   2. A temp allocator. This allocates bytes from the end of the hunk. Temp
 // allocated bytes must be explicitly temp_freed() again. As opposed to the bump
-// allocater, the temp allocator can be freed() out of order.
+// allocator, the temp allocator can be freed() out of order.
 
 // The temp allocator is meant for very short lived objects, to assist data
 // loading. E.g. pixel data from an image file might be temp allocated, handed

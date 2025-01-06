@@ -73,7 +73,7 @@ typedef enum {
 	// In ACTIVE vs. LITE or FIXED vs. ANY collisions, only the "weak" entity 
 	// moves, while the other one stays fixed. In ACTIVE vs. ACTIVE and ACTIVE 
 	// vs. PASSIVE collisions, both entities are moved. LITE or PASSIVE entities
-	// don't collide with other LITE or PASSIVE entities at all. The behaiviour
+	// don't collide with other LITE or PASSIVE entities at all. The behavior
 	// for FIXED vs. FIXED collisions is undefined.
 	ENTITY_PHYSICS_LITE    = ENTITY_PHYSICS_WORLD | ENTITY_COLLIDES_LITE,
 	ENTITY_PHYSICS_PASSIVE = ENTITY_PHYSICS_WORLD | ENTITY_COLLIDES_PASSIVE,
@@ -130,7 +130,7 @@ typedef struct entity_t entity_t;
 	};
 
 // These macros can be used in your entities/*.c files to configure their
-// appearance in the enditor (tools/weltmeister.html)
+// appearance in the editor (tools/weltmeister.html)
 #define EDITOR_SIZE(X, Y)     // Size in the editor. Default (8, 8)
 #define EDITOR_RESIZE(RESIZE) // Whether the entity is resizable in the editor. Default false
 #define EDITOR_COLOR(R, G, B) // The box color in the editor. Default (128, 255, 128)

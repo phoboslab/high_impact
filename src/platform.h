@@ -2,7 +2,7 @@
 #define HI_PLATFORM_H
 
 // This abstracts the underlying platform (currently SDL or Sokol). The platform
-// is responsible for seting up a window, renderer, timing and handling of input
+// is responsible for setting up a window, renderer, timing and handling of input
 // events.
 // It should be possible to add further platforms (e.g. for certain consoles) 
 // without changing any other parts of high_impact... in theory.
