@@ -5,6 +5,7 @@
 // (sound_t) representing a currently playing sound, using one of the sources.
 
 #include "types.h"
+#include "../libs/pl_synth.h"
 
 // The maximum number of samples for which a sound source is decompressed
 // completely at load time. Everything above this limit will be loaded into 
@@ -29,6 +30,9 @@ typedef struct sound_source_t sound_source_t;
 typedef struct { uint16_t id; uint16_t index; } sound_t;
 typedef struct { uint32_t index; } sound_mark_t;
 
+// Initialized the synth for sound_source_from_synth_*()
+void sound_init_synth(void);
+
 // Called by the engine to manage sound memory
 sound_mark_t sound_mark(void);
 void sound_reset(sound_mark_t mark);
@@ -51,6 +55,16 @@ void sound_mix_stereo(float *dest_samples, uint32_t dest_len);
 // Load a sound sorce from a QOA file. Calling this function multiple times with
 // the same path will return the same, cached sound source,
 sound_source_t *sound_source(char *path);
+
+// Initialize a sound source from raw samples. No ownership of the samples is
+// taken; they are not copied.
+sound_source_t *sound_source_with_samples(int16_t *samples, uint32_t len, uint32_t channels, uint32_t samplerate);
+
+// Create a sound soure with the given pl_synth_sound_t defintion
+sound_source_t *sound_source_synth_sound(pl_synth_sound_t *sound);
+
+// Create a sound source with the given pl_synth_song_t definition
+sound_source_t *sound_source_synth_song(pl_synth_song_t *song);
 
 // Return the duration of a sound source
 float sound_source_duration(sound_source_t *source);

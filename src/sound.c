@@ -8,6 +8,8 @@
 #define QOA_NO_STDIO
 #include "../libs/qoa.h"
 
+#define PL_SYNTH_IMPLEMENTATION
+#include "../libs/pl_synth.h"
 
 typedef enum {
 	SOUND_TYPE_PCM = 1,
@@ -59,10 +61,19 @@ static char *source_paths[SOUND_MAX_SOURCES] = {};
 static sound_node_t sound_nodes[SOUND_MAX_NODES];
 static uint32_t nodes_len = 0;
 static uint16_t sound_unique_id = 0;
+static bool sound_synth_initialized = false;
 
 
 void sound_init(int samplerate) {
 	inv_out_samplerate = 1.0 / samplerate;
+}
+
+void sound_init_synth(void) {
+	if (sound_synth_initialized) {
+		return;
+	}
+	pl_synth_init(bump_alloc(PL_SYNTH_TAB_SIZE));
+	sound_synth_initialized = true;
 }
 
 void sound_cleanup(void) {
@@ -273,6 +284,43 @@ sound_source_t *sound_source(char *path) {
 
 	sources_len++;
 	return source;
+}
+
+static char *sound_internal_path = "__internal";
+
+sound_source_t *sound_source_with_samples(int16_t *samples, uint32_t len, uint32_t channels, uint32_t samplerate) {
+	error_if(sources_len >= SOUND_MAX_SOURCES, "Max sound sources (%d) reached", SOUND_MAX_SOURCES);
+	error_if(engine_is_running(), "Cant load sound source during gameplay");
+
+	sound_source_t *source = &sources[sources_len];
+	source->channels = channels;
+	source->len = len;
+	source->samplerate = samplerate;
+	source->type = SOUND_TYPE_PCM;
+	source->pcm_samples = samples;
+
+	source_paths[sources_len] = sound_internal_path;
+
+	sources_len++;
+	return source;
+}
+
+sound_source_t *sound_source_synth_sound(pl_synth_sound_t *sound) {
+	sound_init_synth();
+	int len = pl_synth_sound_len(sound);
+	int16_t *samples = bump_alloc(sizeof(int16_t) * len * 2);
+	pl_synth_sound(sound, samples);
+	return sound_source_with_samples(samples, len, 2, PL_SYNTH_SAMPLERATE);
+}
+
+sound_source_t *sound_source_synth_song(pl_synth_song_t *song) {
+	sound_init_synth();
+	int len = pl_synth_song_len(song);
+	int16_t *samples = bump_alloc(sizeof(int16_t) * len * 2);
+	int16_t *temp_samples = temp_alloc(sizeof(int16_t) * len * 2);
+	pl_synth_song(song, samples, temp_samples);
+	temp_free(temp_samples);
+	return sound_source_with_samples(samples, len, 2, PL_SYNTH_SAMPLERATE);
 }
 
 float sound_source_duration(sound_source_t *source) {

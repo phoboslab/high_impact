@@ -36,7 +36,7 @@ some insights into the decisions made here.
 - [Biolab Disaster](https://github.com/phoboslab/high_biolab): A jump'n'gun 
 platformer, displaying many of high_impacts capabilities.
 - [Drop](https://github.com/phoboslab/high_drop): A minimal arcade game with
-randomly generated levels
+randomly generated levels and generated music and sound effects
 
 
 ## Compiling
@@ -64,6 +64,10 @@ in QOA format. The tools to convert PNG to QOI and WAV to QOA are bundled in
 this repository and can be integrated in your build step. See the example games 
 for a suitable Makefile.
 
+Sound effects and music can alternatively be created with 
+[pl_synth](https://github.com/phoboslab/pl_synth). Have a look at 
+[Drop](https://github.com/phoboslab/high_drop) for an example.
+
 Game levels can be loaded from .json files. A tile editor to create these levels
 is part of high_impact: `weltmeister.html` which can be launched with a simple
 double click from your local copy.
@@ -78,6 +82,7 @@ double click from your local copy.
 - QOI Image Format: https://github.com/phoboslab/qoi
 - QOA Audio Format: https://github.com/phoboslab/qoa
 - pl_json: https://github.com/phoboslab/pl_json
+- pl_synth: https://github.com/phoboslab/pl_synth
 
 Except for SDL2, all libraries are bundled here (see the `libs/` directory).
 
